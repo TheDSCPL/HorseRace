@@ -22,7 +22,7 @@ BIN_FILES = $(patsubst %,$(BIN_DIR)/%.o,$(FILES))
 SRC_FILES = $(patsubst %,$(SRC_DIR)/%.cpp,$(FILES))
 HEADER_FILES = $(patsubst %,$(HEADERS_DIR)/%.hpp,$(filter-out $(MAIN_FILE),$(FILES)))
 
-.PHONY: all pedantic debug set_pedantic set_debug show_start clean
+.PHONY: all pedantic debug set_pedantic set_debug show_start create_bin clean
 
 #PLEASE COMPILE WITH THE "-s" FLAG AT THE END
 
@@ -76,7 +76,7 @@ $(BIN_DIR)/%.o: $(SRC_DIR)/%.cpp $$(wildcard $$(HEADRES_DIR)/%.hpp)
 
 #----------MAIN PROJECT RECEPY RECIPE------------#
 
-$(PROGRAM_NAME): show_start $(BIN_FILES)
+$(PROGRAM_NAME): show_start create_bin $(BIN_FILES)
 	$(COMPILER) $(BIN_FILES) -o $@ $(FLAGS)
 
 #----------show_startING RECIPES------------#
@@ -90,6 +90,9 @@ show_start:
 	#echo "'"$(HEADRES_DIR)/$(MAIN_FILE).hpp"'"
 	#echo "'"headers/Main.hpp"'"
 	#rm -rf $(PROGRAM_NAME)
+
+create_bin:
+	mkdir -p bin
 
 clean:
 	rm -rf bin/*.o
