@@ -1,0 +1,31 @@
+{
+	"folders":
+	[
+		{
+			"file_exclude_patterns":
+			[
+				"*.zip"
+			],
+			"folder_exclude_patterns":
+			[
+				""
+			],
+			"follow_symlinks": false,
+			"path": "."
+		},
+		{
+			"follow_symlinks": false,
+			"path": "headers"
+		},
+		{
+			"follow_symlinks": false,
+			"path": "src"
+		}
+	],
+	"settings":
+	[
+		{
+			"word_wrap": true
+		}
+	]
+}

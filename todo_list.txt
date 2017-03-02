@@ -1,0 +1,8 @@
+(check)-ter a certeza que nenhuma das strings que vai ser passada para o SQL tem caracteres que "estraguem" a query. por exemplo '.
+(check)-garantir que todas as constraints e rules dos valores da DB são cumpridos antes de chamar as queries para ser mais facil garantir a selectividade dos erros.
+(check)-start_race e todas as funções threaded para as corridas
+(NOT CHECKED)-show_horses ter um argumnto opcional para imprimir só alguns cavalos de modo a unir o "show_all_horses" com o "show_some_horses"
+(check)-fazer com que o "register" ponha o "username" em minúsculas antes de adicionar
+(check)-"register" não funciona com utilizador normal logado
+(check)-função para ver as apostas de um user
+(check)-alterar a check_valid para verificar com "strstr" se existe um "--" dentro de modo a evitar SQL injection usando comentários.
