@@ -4,6 +4,7 @@
 #include "../headers/Log.hpp"
 #include "../headers/Race.hpp"
 #include "../headers/Properties.hpp"
+#include "../libs/SHA-256.hpp"
 
 #include <ctime>
 #include <stdlib.h>
@@ -55,6 +56,8 @@ int main(int argc, char *argv[])
 	pthread_create(&watchdog,NULL,watchdog_routine,NULL);
 
 	while(races.size())	usleep(0.5*1000000);
+
+	cout << SHA_256_digest("ola","adeus") << endl;
 
 	/*try {
 		//Properties p("p.properties");
