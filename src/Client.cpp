@@ -1,9 +1,19 @@
 #define CLIENT_CPP 1
 #include "../headers/Client.hpp"
+
+#include "../headers/Sockets.hpp"
+#include "../headers/DBMS.hpp"
+#include "../headers/Race.hpp"
+#include "../headers/Log.hpp"
+#include "../headers/Utils.hpp"
+#include "../headers/Constants.hpp"
 #include <cctype>
 #include <cxxabi.h>
 
-using namespace __cxxabiv1;
+#define EXECUTE res=SQLServer::server().executeSQL(query.str());
+
+using namespace std;
+using namespace Constants;
 
 #ifndef vcout //verbose cout.
 #define vcout if(false) cout
@@ -23,25 +33,25 @@ void print_command(parsed_command temp)
  	cerr << endl << "command: \"" << temp.cmd << "\"" << endl << endl;
  	for(auto&& it : temp.args)
  	{
- 		if(it.arg_type==_int_)
+ 		if(it.isOfType(typeid(int)))
  		{
- 			cerr << endl << "int =" << it.arg_int() << endl;
+ 			cerr << endl << "int = " << it.get<int>() << endl;
  		}
- 		if(it.arg_type==_double_)
+ 		if(it.isOfType(typeid(double)))
  		{
- 			cerr << endl << "double =" << it.arg_double() << endl;
+ 			cerr << endl << "double = " << it.get<double>() << endl;
  		}
- 		if(it.arg_type==_bool_)
+ 		if(it.isOfType(typeid(bool)))
  		{
- 			cerr << endl << "bool =" << b2s(it.arg_bool()) << endl;
+ 			cerr << endl << "bool = " << b2s(it.get<bool>()) << endl;
  		}
- 		if(it.arg_type==_string_)
+ 		if(it.isOfType(typeid(string)))
  		{
- 			cerr << endl << "string =" << it.arg_string() << endl;
+ 			cerr << endl << "string = " << it.get<string>() << endl;
  		}
- 		if(it.arg_type==_v_int_)
+ 		if(it.isOfType(typeid(vector<int>)))
  		{
- 			vector<int> vi=it.arg_v_int();
+ 			vector<int> vi=it.get<vector<int>>();
  			cerr << endl << "v_int = ";
  			for(int i : vi)
  			{
@@ -53,21 +63,25 @@ void print_command(parsed_command temp)
  	}
 }
 
-bool is_bool(string s)
-{
-	transform(s.begin(),s.end(),s.begin(),::tolower); //tolower every char in the string
-	if(s=="true" || s=="false")
-		return true;
-	return false;
-}
+/*vector<arg>& Commands::getCommands() {
+	std::vector<arg> ret;
+	ret.push_back
+}*/
+
+//map<string,vector<arg>> getCommands()
 
 parsed_command Client::get_parsed_command(string input)
 {
+	const type_info& _string = typeid(string);
+	const type_info& _int = typeid(int);
+	const type_info& _double = typeid(double);
+	const type_info& _bool = typeid(bool);
+	const type_info& _v_int = typeid(vector<int>);
 	const map<string,vector<arg>> commands =
 	{
 		{ "\\help" , {} },																								//ALTER
 		{ "\\clear" , {} },																							//DONE
-		{ "\\quit" , {} },																							//DONE
+		{ "\\quit" , {} }/*,																							//DONE
 		{ "\\login" , {(string)"" , (string)""} },	//username,pass													//DONE
 		{ "\\logout" , {} },																						//DONE
 		{ "\\register" , {(string)"" , (string)"" , (string)""} }, //username,pass,name (name may contain spaces)	//DONE
@@ -95,7 +109,7 @@ parsed_command Client::get_parsed_command(string input)
 		{ "\\show_race_info" , {-1} },																				//DONE
 		{ "\\show_bets" , {-1} },																					//DONE
 		{ "\\show_bets_other", {-1,-1} },																			//DONE -- ADD TO HELP
-		{ "\\sql_query" , {(string)""} } //run a SQL query															//DONE
+		{ "\\sql_query" , {(string)""} } //run a SQL query															//DONE*/
 	};
 	stringstream temp(input);
 	size_t size=temp.str().size();
@@ -121,7 +135,7 @@ parsed_command Client::get_parsed_command(string input)
 			command.cmd.clear();
 			return command;
 		}
-		if(it->second[i].arg_type==_string_)
+		if(it->second[i].isOfType(typeid(string)))
 		{
 			if(i==n-1)	//quando o último argumento é uma string, põe tudo o resto no argumento string
 			{
@@ -136,7 +150,7 @@ parsed_command Client::get_parsed_command(string input)
 				continue;
 			}
 		}
-		if(it->second[i].arg_type==_v_int_)
+		if(it->second[i].isOfType(typeid(vector<int>)))
 		{
 			vector<int> tt;
 			for(int t;place<size;tt.push_back(t))
@@ -160,7 +174,7 @@ parsed_command Client::get_parsed_command(string input)
 		}
 		temp >> buffer;
 		place+=(1+buffer.size());
-		if(it->second[i].arg_type==_bool_)
+		if(it->second[i].isOfType(typeid(bool)))
 		{
 			if(!is_bool(buffer))
 			{
@@ -172,7 +186,7 @@ parsed_command Client::get_parsed_command(string input)
 			command.args[i]=s2b(buffer);
 			continue;
 		}
-		if(it->second[i].arg_type==_int_)
+		if(it->second[i].isOfType(typeid(int)))
 		{
 			int t;
 			try
@@ -189,7 +203,7 @@ parsed_command Client::get_parsed_command(string input)
 			command.args[i]=t;
 			continue;
 		}
-		if(it->second[i].arg_type==_double_)
+		if(it->second[i].isOfType(typeid(double)))
 		{
 			double db;
 			try
@@ -294,34 +308,34 @@ bool Client::parse( string ins ) //true always except when "\quit" received.
 		if(command.cmd=="\\help") 						{help();}
 		else if(command.cmd=="\\clear") 				{clear();}
 		else if(command.cmd=="\\quit") 					{return !quit();}
-		else if(command.cmd=="\\login") 				{login(command.args[0].arg_string(),command.args[1].arg_string());}
+		else if(command.cmd=="\\login") 				{login(command.args[0].get<string>(),command.args[1].get<string>());}
 		else if(command.cmd=="\\logout") 				{logout();}
-		else if(command.cmd=="\\register") 				{regist(command.args[0].arg_string(),command.args[1].arg_string(),command.args[2].arg_string());}
-		else if(command.cmd=="\\change_admin") 			{change_admin(command.args[0].arg_string(),command.args[1].arg_bool());}
-		else if(command.cmd=="\\change_admin_id") 		{change_admin(command.args[0].arg_int(),command.args[1].arg_bool());}
-		else if(command.cmd=="\\passwd") 				{passwd(user_id,command.args[0].arg_string(),command.args[1].arg_string());}
-		else if(command.cmd=="\\passwd_other") 			{passwd(command.args[0].arg_string(),command.args[1].arg_string(),command.args[2].arg_string());}
-		else if(command.cmd=="\\passwd_other_id")		{passwd(command.args[0].arg_int(),command.args[1].arg_string(),command.args[2].arg_string());}
-		else if(command.cmd=="\\add_horse")				{add_horse(command.args[0].arg_double(),command.args[1].arg_string());}
-		else if(command.cmd=="\\start_race") 			{start_race(command.args[0].arg_int());}
-		else if(command.cmd=="\\watch_race")			{watch_race(command.args[0].arg_int());}
-		else if(command.cmd=="\\add_to_race")			{add_to_race(command.args[0].arg_int(),command.args[1].arg_v_int());}
-		else if(command.cmd=="\\add_race")				{add_race(command.args[0].arg_int());}
-		else if(command.cmd=="\\add_credits") 			{add_credits(command.args[0].arg_int(),command.args[1].arg_double());}
-		else if(command.cmd=="\\bet") 					{bet(user_id,command.args[0].arg_int(),command.args[1].arg_int(),command.args[2].arg_double());}
-		else if(command.cmd=="\\bet_other") 			{bet(command.args[0].arg_int(),command.args[1].arg_int(),command.args[2].arg_int(),command.args[3].arg_double());}
-		else if(command.cmd=="\\stop_server") 			{if(client_socket==IN_SERVER&&is_admin(user_id)) {if(N.srv_running()) N.shutdown_server(); else writeline(client_socket,"Server is already shut down.");} else writeline(client_socket,"You cannot shutdown the server unless you are logged in as an admin in the server.");}
-		else if(command.cmd=="\\start_server") 			{if(client_socket==IN_SERVER&&is_admin(user_id)) N.start_server();else writeline(client_socket,"You cannot start the server unless you are logged in as an admin in the server.");}
-		else if(command.cmd=="\\show_users") 			{show_users(command.args[0].arg_string());}
+		else if(command.cmd=="\\register") 				{regist(command.args[0].get<string>(),command.args[1].get<string>(),command.args[2].get<string>());}
+		else if(command.cmd=="\\change_admin") 			{change_admin(command.args[0].get<string>(),command.args[1].get<bool>());}
+		else if(command.cmd=="\\change_admin_id") 		{change_admin(command.args[0].get<int>(),command.args[1].get<bool>());}
+		else if(command.cmd=="\\passwd") 				{passwd(user_id,command.args[0].get<string>(),command.args[1].get<string>());}
+		else if(command.cmd=="\\passwd_other") 			{passwd(command.args[0].get<string>(),command.args[1].get<string>(),command.args[2].get<string>());}
+		else if(command.cmd=="\\passwd_other_id")		{passwd(command.args[0].get<int>(),command.args[1].get<string>(),command.args[2].get<string>());}
+		else if(command.cmd=="\\add_horse")				{add_horse(command.args[0].get<double>(),command.args[1].get<string>());}
+		else if(command.cmd=="\\start_race") 			{start_race(command.args[0].get<int>());}
+		else if(command.cmd=="\\watch_race")			{watch_race(command.args[0].get<int>());}
+		else if(command.cmd=="\\add_to_race")			{add_to_race(command.args[0].get<int>(),command.args[1].get<vector<int>>());}
+		else if(command.cmd=="\\add_race")				{add_race(command.args[0].get<int>());}
+		else if(command.cmd=="\\add_credits") 			{add_credits(command.args[0].get<int>(),command.args[1].get<double>());}
+		else if(command.cmd=="\\bet") 					{bet(user_id,command.args[0].get<int>(),command.args[1].get<int>(),command.args[2].get<double>());}
+		else if(command.cmd=="\\bet_other") 			{bet(command.args[0].get<int>(),command.args[1].get<int>(),command.args[2].get<int>(),command.args[3].get<double>());}
+		else if(command.cmd=="\\stop_server") 			{if(client_socket==IN_SERVER&&is_admin(user_id)) {if(Network::server().srv_running()) Network::server().shutdown_server(); else writeline(client_socket,"Server is already shut down.");} else writeline(client_socket,"You cannot shutdown the server unless you are logged in as an admin in the server.");}
+		else if(command.cmd=="\\start_server") 			{if(client_socket==IN_SERVER&&is_admin(user_id)) Network::server().start_server();else writeline(client_socket,"You cannot start the server unless you are logged in as an admin in the server.");}
+		else if(command.cmd=="\\show_users") 			{show_users(command.args[0].get<string>());}
 		else if(command.cmd=="\\show_all_horses")	 	{show_horses(0);}
-		else if(command.cmd=="\\show_some_horses") 		{show_horses(command.args[0].arg_int());}
-		else if(command.cmd=="\\show_horses_on_race") 	{show_horses_on_race(command.args[0].arg_int());}
-		else if(command.cmd=="\\sql_query") 			{sql_query(command.args[0].arg_string());}
-		else if(command.cmd=="\\show_races")			{show_races(command.args[0].arg_string());}
-		else if(command.cmd=="\\show_race_info")		{show_race_info(command.args[0].arg_int());}
-		else if(command.cmd=="\\show_bets")	 			{show_user_bets(user_id,command.args[0].arg_int());}
-		else if(command.cmd=="\\show_bets_other")	 	{show_user_bets(command.args[0].arg_int(),command.args[1].arg_int());}
-		else if(command.cmd=="\\show_server_ip")		{writeline(client_socket,"Server_IP: " + string(N.get_ip(N.sockfd)) + ":" + to_string(PORT));}
+		else if(command.cmd=="\\show_some_horses") 		{show_horses(command.args[0].get<int>());}
+		else if(command.cmd=="\\show_horses_on_race") 	{show_horses_on_race(command.args[0].get<int>());}
+		else if(command.cmd=="\\sql_query") 			{sql_query(command.args[0].get<string>());}
+		else if(command.cmd=="\\show_races")			{show_races(command.args[0].get<string>());}
+		else if(command.cmd=="\\show_race_info")		{show_race_info(command.args[0].get<int>());}
+		else if(command.cmd=="\\show_bets")	 			{show_user_bets(user_id,command.args[0].get<int>());}
+		else if(command.cmd=="\\show_bets_other")	 	{show_user_bets(command.args[0].get<int>(),command.args[1].get<int>());}
+		else if(command.cmd=="\\show_server_ip")		{writeline(client_socket,"Server_IP: " + string(Network::server().get_ip(Network::server().sockfd)) + ":" + to_string(PORT));}
 		//else if(command.cmd=="\\")	 					{}
 	}
 	catch(SQL_Error e)
@@ -341,23 +355,23 @@ bool Client::parse( string ins ) //true always except when "\quit" received.
 			clog(err_msg.str() << "SQL query is NULL.");
 			return true;
 		}
-		//N.writeline(client_socket,"An error that wasn't supposed to have happened has occurred. Please contact the admin");
+		//Network::server().writeline(client_socket,"An error that wasn't supposed to have happened has occurred. Please contact the admin");
 		clog(err_msg.str() << "Command: \"" << ins << "\". SQL query error:" << endl << PQresultErrorMessage(e.err));
 		//PQclear(e.err);
 	}
 	catch(int i)
 	{
-		N.writeline(client_socket,"An error that wasn't supposed to have happened has occurred. Please contact the admin.");
+		Network::server().writeline(client_socket,"An error that wasn't supposed to have happened has occurred. Please contact the admin.");
 	}
 	/*catch(logic_error e)
 	{
-		N.writeline(client_socket,"An error that wasn't supposed to have happened has occurred. Please contact the admin.");
+		Network::server().writeline(client_socket,"An error that wasn't supposed to have happened has occurred. Please contact the admin.");
 		clog("Caught a logic error. What()="+string(e.what()));
 	}*/
 	catch(...)
 	{
-		clog("Caught an unknown error while parsing command=\"" << ins << "\" from socket "+to_string(client_socket)+". Exception type: \""+util_demangle(__cxa_current_exception_type()->name())+"\"");
-		N.writeline(client_socket,"An error that wasn't supposed to have happened has occurred. Please contact the admin.");
+		clog("Caught an unknown error while parsing command=\"" << ins << "\" from socket "+to_string(client_socket)+". Exception type: \""+util_demangle(__cxxabiv1::__cxa_current_exception_type()->name())+"\"");
+		Network::server().writeline(client_socket,"An error that wasn't supposed to have happened has occurred. Please contact the admin.");
 	}
 	return true;
 }
@@ -381,7 +395,7 @@ bool check_valid(string pa)
 Client::Client(int so) : client_socket(so), user_id(LOGGED_OFF)
 {
 	vcout << "constructor " << client_socket << endl;
-	N.clients.insert(PAIR(client_socket,LOGGED_OFF));
+	Network::server().clients.insert(PAIR(client_socket,LOGGED_OFF));
 
 	if(client_socket>0)
 	{
@@ -413,7 +427,7 @@ Client::~Client()
 		vcout << "who was logged in as \"" << user_id << "\" has disconnected.";
 		clog( "Client in socket " << client_socket << "(user_id=" << user_id << ") has disconnected. Killing thread and closing socket." );
 	}
-	//N.clients.erase(client_socket);
+	//Network::server().clients.erase(client_socket);
 
 	// Fechar o socket
 	//shutdown(client_socket,2);
@@ -422,7 +436,7 @@ Client::~Client()
 
 void Client::writeline(int socketfd, string line,bool paragraph)
 {
-	N.writeline(socketfd,line,paragraph);
+	Network::server().writeline(socketfd,line,paragraph);
 }
 
 void Client::regist(string login_name , string pass , string name , bool ad , int cr)	//needs to be erased after use with PQclear()!!!
@@ -521,7 +535,7 @@ void Client::login(string login_name, string pass)
 
 	name=PQgetvalue(res,0,1);
 	username=login_name;
-	N.clients[client_socket]=user_id;
+	Network::server().clients[client_socket]=user_id;
 
 	clog("Socket " << client_socket << " logged in as user_id " << user_id << ", username \"" << username << "\"");
 	query.str("");query.clear();
@@ -569,7 +583,7 @@ void Client::logout()
 		return;
 	writeline(client_socket,"You are now logged off!");
 	clog("Socket " << client_socket << " which was logged with user_id=" << user_id << ", username \"" << username << "\" and name \"" << name << "\" has logged off");
-	N.clients[client_socket]=user_id=LOGGED_OFF;
+	Network::server().clients[client_socket]=user_id=LOGGED_OFF;
 	name="";
 	username="";
 }
@@ -598,7 +612,7 @@ bool Client::quit()	//returns true for quitting and false for not quitting (not 
 		}
 		else
 		{
-			N.shutdown_server();
+			Network::server().shutdown_server();
 			return true;
 		}
 	}
@@ -608,7 +622,7 @@ int Client::get_user_id(string login_name)
 {	//returns LOGGED_OFF if user doesn't exist
 	if(!check_valid(login_name))
 	{
-		writeline(client_socket,"The login_name you inserted contains invalid characters.");
+		//writeline(client_socket,"The login_name you inserted contains invalid characters.");
 		return LOGGED_OFF;
 	}
 	stringstream query;
@@ -1232,7 +1246,7 @@ void Client::watch_race(int r_i)
 	clear();
 	string dummy;
 	temp->second->sockets_watching.insert(client_socket);
-	N.readline(client_socket,dummy);
+	Network::server().readline(client_socket,dummy);
 	clear();
 	temp=races.find(r_i);
 	if(temp==races.end())
@@ -1512,7 +1526,7 @@ void Client::show_races(string flag)
 			writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
 			throw(e);
 		}
-		S.print_result(res,client_socket);
+		S.printResult(res,client_socket);
 		PQclear(res);
 		return;
 	}
@@ -1637,7 +1651,7 @@ void Client::show_horses(int n)
 		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
 		throw(e);
 	}
-	S.print_result(res,client_socket);
+	S.printResult(res,client_socket);
 	PQclear(res);
 }
 
@@ -1676,7 +1690,7 @@ void Client::show_user_bets(int u_i,int lim)
 		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
 		throw(e);
 	}
-	S.print_result(res,client_socket);
+	S.printResult(res,client_socket);
 	PQclear(res);
 }
 
@@ -1710,12 +1724,12 @@ void Client::show_users(string opt)
 			writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
 			throw(e);
 		}
-		S.print_result(res,client_socket);
+		S.printResult(res,client_socket);
 		PQclear(res);
 		return;
 	}
 
-	map<int,int> clients_photo=N.clients;
+	map<int,int> clients_photo=Network::server().clients;
 	query << "CREATE TEMP TABLE foo (" << endl;
 	query << "user_id integer NOT NULL," << endl;
 	query << "client_socket char varying NOT NULL" << endl;
@@ -1770,7 +1784,7 @@ void Client::show_users(string opt)
 		throw(e);
 	}
 	query.str("");query.clear();
-	S.print_result(res,client_socket);
+	S.printResult(res,client_socket);
 	PQclear(res);
 
 	query << "DISCARD TEMP;" << endl;
@@ -1815,7 +1829,7 @@ void Client::show_horses_on_race(int r_i)
 		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
 		throw(e);
 	}
-	S.print_result(res,client_socket);
+	S.printResult(res,client_socket);
 	PQclear(res);
 }
 
@@ -1831,7 +1845,7 @@ void Client::sql_query(string q)
 	PGresult* res=NULL;
 	try
 	{
-		res=SQL_server_class::server().executeSQL(q);
+		res=SQLServer::server().executeSQL(q);
 	}
 	catch(SQL_Error e)
 	{
@@ -1841,9 +1855,43 @@ void Client::sql_query(string q)
 		return;
 	}
 	clog("User " << user_id << " used the \"sql_query\" command. Query inserted:" << endl << q);
-	S.print_result(res,client_socket);
+	S.printResult(res,client_socket);
 	PQclear(res);
 }
+
+using namespace std;
+using namespace boost;
+
+arg::arg() {}
+arg::arg(boost::any d) : data(d) {}
+arg::arg(const arg& d) : data(d.data) {}
+
+bool arg::set(const boost::any& st) {
+	if(!this->isEmpty() && !this->isOfType(st.type()))
+		return false;
+	this->data = st;
+	return true;
+}
+
+template <typename T> T arg::get() const {
+	return any_cast<T>(this->data);
+}
+
+bool arg::isEmpty() const {
+	return this->data.empty();
+}
+
+bool arg::isOfType(const type_info& t) const {
+	return t == this->data.type();
+}
+
+//template arg::get<int>();
+//template arg::get<bool>();
+//template arg::get<double>();
+//template arg::get<string>();
+//template arg::get<vector<int>>();
+
+//https://en.wikipedia.org/wiki/ANSI_escape_code#CSI_codes	//http://www.termsys.demon.co.uk/vtansi.htm
 
 bool check_horse_in_race(int h_i, int r_i)
 {

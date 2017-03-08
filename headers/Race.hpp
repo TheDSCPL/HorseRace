@@ -1,8 +1,7 @@
 #ifndef _RACE_HPP_
 #define _RACE_HPP_ 1
-#include "../headers/Sockets.hpp"
-#include "../headers/DBMS.hpp"
 #include <map>
+#include <string>
 #include <vector>
 #include <set>
 
@@ -34,7 +33,7 @@ typedef struct
 {
 	double speed;
 	double state;
-	string name;
+	std::string name;
 	double position=0;	//physically in the race
 	int place=-1;		//place in the leaderboards
 	bool running=true;
@@ -55,10 +54,10 @@ class Race
 		return NULL;
 	}
 	void race_routine();
-	void broadcast(string s,int column=-1,int line=-1);
+	void broadcast(std::string s,int column=-1,int line=-1);
 	void print_tracks();
 	void print_title();
-	void writeline(int so, string s,int column=-1,int line=-1);
+	void writeline(int so, std::string s,int column=-1,int line=-1);
 	void count_down(int secs);
 	void clear();
 	void print_update_places();
@@ -69,14 +68,14 @@ class Race
 	void add_balance(int r_i,int u_i, int h_i, double cr);
 	void add_credits(int u_i, double cr);
 public:
-	set<int> sockets_watching;	//socktfd of all the clients watching the race
+	std::set<int> sockets_watching;	//socktfd of all the clients watching the race
 	bool finished=false;
-	map<int,horse_info> horses;	//horse_id,horse_info
+	std::map<int,horse_info> horses;	//horse_id,horse_info
 
 	Race(int r_i,int l);	//race_id , laps
 	~Race();
 };
 
-extern map<int,class Race*> races;
+extern std::map<int,class Race*> races;
 
 #endif

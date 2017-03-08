@@ -1,10 +1,17 @@
 #include "../headers/Race.hpp"
+#include "../headers/Sockets.hpp"
+#include "../headers/DBMS.hpp"
+#include "../headers/Log.hpp"
+#include "../headers/Client.hpp"
+#include "../headers/Utils.hpp"
+
+#define EXECUTE res=SQLServer::server().executeSQL(query.str());
 
 map<int,class Race*> races;
 
 void Race::writeline(int so, string s,int column,int line)
 { // Envia uma string para um socket
-	if(N.clients.find(so)==N.clients.end())
+	if(Network::server().clients.find(so)==Network::server().clients.end())
 		return;
 	if(column>=0&&line>=0)
 		s="\u001B[s\u001B[" + to_string(line) + ";" + to_string(column) + "H"  + s + "\u001B[u";
@@ -101,7 +108,7 @@ Race::Race(int r_i , int l) : race_id(r_i) , laps(l) , bets(get_race_bets(r_i))
 	{
 		cerr << "Error while starting race " << r_i << "'s thread!" << endl;
 		clog( "FATAL ERROR: Race::Race() -> Couldn't start a race thread for race " << r_i << ". Program will now halt!");
-		N.broadcast(-1,"FATAL ERROR ON RACE!");
+		Network::server().broadcast(-1,"FATAL ERROR ON RACE!");
 		exit(-1);
 	}
 }

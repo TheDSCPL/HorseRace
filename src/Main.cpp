@@ -1,9 +1,9 @@
 #include "../headers/Sockets.hpp"
 #include "../headers/DBMS.hpp"
-#include "../headers/Error.hpp"
 #include "../headers/Log.hpp"
 #include "../headers/Race.hpp"
 #include "../headers/Properties.hpp"
+#include "../headers/Client.hpp"
 #include "../libs/SHA-256.hpp"
 
 #include <ctime>
@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
 
 	clog( "Program has started" );
 
-	N;	//creates the sockets server. check sockets.hpp for the definition of this macro//
+	Network::server();	//creates the sockets server. check sockets.hpp for the definition of this macro//
 
 	//--------------------------------SERVER CLIENT ROUTINE---------------------------------//
 

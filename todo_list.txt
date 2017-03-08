@@ -6,3 +6,7 @@
 (check)-"register" não funciona com utilizador normal logado
 (check)-função para ver as apostas de um user
 (check)-alterar a check_valid para verificar com "strstr" se existe um "--" dentro de modo a evitar SQL injection usando comentários.
+
+-improve the commands
+-implement the prepared statements
+-correct the bug of the initialization of the commands

@@ -1,13 +1,11 @@
 #ifndef SOCKETS_HPP
 #define SOCKETS_HPP 1
 
-#define N Network::server() //I know I'm lazy. I love it. Don't judge.
+//#ifndef Network::server()
+//#define Network::server() Network::server() //I know I'm lazy. I love it. Don't judge.
+//#endif
 
 //--------------------------INCLUDES--------------------------//
-#include "DBMS.hpp"
-#include "Error.hpp"
-#include "Log.hpp"
-#include "Client.hpp"
 
 #include <iostream> // cout
 #include <sstream> // stringstream
@@ -33,11 +31,6 @@
 #define LOCK pthread_mutex_lock(&cout_mutex);
 #define UNLOCK pthread_mutex_unlock(&cout_mutex);
 #define endl "\r" << endl
-#define ALL (-1)
-#define ACTIVE (-2)
-#define INACTIVE (-3)
-#define LOGGED_IN (-4)
-#define LOGGED_OFF (-5)
 
 //--------------------------USING NAMESPACES--------------------------//
 using namespace std;
@@ -94,7 +87,7 @@ public:
 
 private:
 
-  int newsockfd, port = PORT;
+  int newsockfd, port;
   socklen_t client_addr_length;
   struct sockaddr_in serv_addr, cli_addr;
   bool server_running=false,Flag_shutdown=false;

@@ -1,36 +1,28 @@
 #include "../headers/DBMS.hpp"
 #include "../headers/Properties.hpp"
+#include "../headers/Log.hpp"
+#include "../headers/Client.hpp"
+#include "../headers/Sockets.hpp"
+#include "../headers/Utils.hpp"
 #include <sstream>
 
 #ifndef vcout //verbose cout.
 #define vcout if(false) cout
 #endif
 
-string b2s(bool b)
+SQLServer::SQLServer() //construtor
 {
-  string s(b? "true" : "false");
-  return s;
+  start();
 }
 
-bool s2b(string s)
-{ //returns true if s is "true" or "t". this function IS NOT case sensitive
-  transform(s.begin(),s.end(),s.begin(),::tolower); //tolower every char in the string
-  if(s=="true"||s=="t")
-    return true;
-  return false;
-}
-
-SQL_server_class::SQL_server_class() //construtor
+SQLServer::~SQLServer() //destrutor
 {
-  SQL_server_start();
+  for(PreparedStatement* i : preparedStatements)
+    delete i;
+  stop();
 }
 
-SQL_server_class::~SQL_server_class() //destrutor
-{
-  SQL_server_stop();
-}
-
-void SQL_server_class::SQL_server_start()
+void SQLServer::start()
 {
   if(PQstatus(conn)==CONNECTION_OK)
     return;
@@ -67,7 +59,7 @@ void SQL_server_class::SQL_server_start()
   clog( "DB successfully created" );
 }
 
-void SQL_server_class::SQL_server_stop()
+void SQLServer::stop()
 {
   //cout << "SQL before: " << PQstatus(conn);
   if(PQstatus(conn)==CONNECTION_OK)
@@ -76,7 +68,7 @@ void SQL_server_class::SQL_server_stop()
   //cout << "\t\tSQL after: " << PQstatus(conn) << endl;
 }
 
-PGresult* SQL_server_class::executeSQL(string sql)
+PGresult* SQLServer::executeSQL(string sql)
 {
   PGresult* res = PQexec(conn, sql.c_str());
   if(!(PQresultStatus(res) == PGRES_COMMAND_OK || PQresultStatus(res) == PGRES_TUPLES_OK))
@@ -85,7 +77,7 @@ PGresult* SQL_server_class::executeSQL(string sql)
   return res;
 }
 
-void SQL_server_class::print_result(PGresult *result,int client_socket,int hide_num_rows)
+void SQLServer::printResult(PGresult *result,int client_socket,int hide_num_rows)
 {
 	/*for (int row = 0; row < PQntuples(res); row++)
 	cout << PQgetvalue(res, row, 0) << ' ' << PQgetvalue(res, row, 1) << endl;*/
@@ -102,7 +94,16 @@ void SQL_server_class::print_result(PGresult *result,int client_socket,int hide_
 
   PQprint(temp,result,&opts);
   fclose(temp);
-  N.writeline(client_socket,"");
-  N.writeline(client_socket,out,false);
+  Network::server().writeline(client_socket,"");
+  Network::server().writeline(client_socket,out,false);
   free(out);
+}
+
+SQL_Error::SQL_Error(PGresult* e) : err(e) {}
+
+SQL_Error::SQL_Error(SQL_Error* e) : err(e->err) {}
+
+SQL_Error::~SQL_Error()
+{
+  //PQclear(err);
 }

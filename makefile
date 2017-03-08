@@ -7,7 +7,7 @@ SRC_DIR = src
 HEADRES_DIR = headers
 LIBS_DIR = libs
 
-FLAGS = -std=c++11 -pthread
+FLAGS = -std=c++11 -pthread -Wnarrowing
 PFLAGS = -Wall -pedantic
 DFLAGS = -g
 PACKFLAGS = -static -static-libgcc -static-libstdc++
@@ -24,7 +24,7 @@ LINKER_LIBS =  $(patsubst %,-l%,$(DYNAMIC_LIBS))
 #LINKER_LIBS += -Wl, -Bstatic $(patsubst %,-l%,$(STATIC_LIBS))
 
 #LINKER_FLAGS = $(LINKER_LIBS_PATHS) $(LINKER_LIBS)
-FILES = Log DBMS Sockets Client Error Race Properties Commands $(MAIN_FILE)
+FILES = Log DBMS Sockets Client Race Properties Utils $(MAIN_FILE)
 #FILES += $(MAIN_FILE)
 
 #RED_BG=[31m
