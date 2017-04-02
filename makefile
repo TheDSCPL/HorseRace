@@ -12,7 +12,7 @@ PFLAGS = -Wall -pedantic
 DFLAGS = -g
 PACKFLAGS = -static -static-libgcc -static-libstdc++
 
-MY_LIBS = SHA-256
+#MY_LIBS = SHA-256
 DYNAMIC_LIBS = pq cryptopp
 
 #LINKER_STATIC_LIBS_PATHS = libs
@@ -24,7 +24,7 @@ LINKER_LIBS =  $(patsubst %,-l%,$(DYNAMIC_LIBS))
 #LINKER_LIBS += -Wl, -Bstatic $(patsubst %,-l%,$(STATIC_LIBS))
 
 #LINKER_FLAGS = $(LINKER_LIBS_PATHS) $(LINKER_LIBS)
-FILES = Log DBMS Sockets Client Race Properties Utils $(MAIN_FILE)
+FILES = Log DBMS Sockets Client Race Properties Utils SHA $(MAIN_FILE)
 #FILES += $(MAIN_FILE)
 
 #RED_BG=[31m

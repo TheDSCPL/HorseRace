@@ -42,7 +42,7 @@ typedef struct
 
 class Race
 {
-	int next_place=1;
+	int next_place;
 	const int race_id;
 	pthread_t race_t;
 	const int laps;

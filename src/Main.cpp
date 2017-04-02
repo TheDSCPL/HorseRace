@@ -4,7 +4,7 @@
 #include "../headers/Race.hpp"
 #include "../headers/Properties.hpp"
 #include "../headers/Client.hpp"
-#include "../libs/SHA-256.hpp"
+#include "../headers/SHA.hpp"
 
 #include <ctime>
 #include <stdlib.h>
@@ -57,7 +57,11 @@ int main(int argc, char *argv[])
 
 	while(races.size())	usleep(0.5*1000000);
 
-	cout << SHA_256_digest("ola","adeus") << endl;
+	/*cout << SHA_256_digest("password") << endl;
+    cout << SHA_512_digest("password") << endl;
+    cout << SHA_256_digest("ole") << endl;
+    cout << SHA_256_digest("ola") << endl;
+    cout << SHA_256_digest("ola") << endl;*/
 
 	/*try {
 		//Properties p("p.properties");

@@ -90,8 +90,8 @@ private:
   int newsockfd, port;
   socklen_t client_addr_length;
   struct sockaddr_in serv_addr, cli_addr;
-  bool server_running=false,Flag_shutdown=false;
-  pthread_t server_t=0;
+  bool server_running,Flag_shutdown;
+  pthread_t server_t;
 
 	void server_routine();
 

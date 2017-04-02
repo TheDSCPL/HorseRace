@@ -12,10 +12,9 @@ using namespace Constants;
 
 pthread_mutex_t cout_mutex;
 
-Network::Network()
+Network::Network() : server_running(false), Flag_shutdown(false), server_t(0)
 {
   clog( "Entered Network's constructor" );
-  server_running=false;
   // Inicializar o socket
   // sockfd - id do socket principal do servidor
   // Se retornar < 0 ocorreu um erro
