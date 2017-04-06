@@ -72,7 +72,7 @@ void Network::start_server()
   bzero((char *) &serv_addr, sizeof(serv_addr));
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = INADDR_ANY;
-  serv_addr.sin_port = htons(s2b(Properties::getDefault().getProperty("PORT")));
+  serv_addr.sin_port = htons(Utils::s2b(Properties::getDefault().getProperty("PORT")));
   client_addr_length = sizeof(cli_addr);
 
   // Fazer bind do socket. Apenas nesta altura é que o socket fica ativo

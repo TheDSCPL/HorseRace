@@ -8,7 +8,7 @@
 #include "../headers/Utils.hpp"
 #include "../headers/Constants.hpp"
 #include <cctype>
-#include <cxxabi.h>
+#include <string>
 
 #define EXECUTE res=SQLServer::server().executeSQL(query.str());
 
@@ -18,15 +18,6 @@ using namespace Constants;
 #ifndef vcout //verbose cout.
 #define vcout if(false) cout
 #endif
-
-string util_demangle(std::string to_demangle)	//to know what was the unknow exception was when "catch(...) activates	//http://stackoverflow.com/a/24997351/6302540
-{
-    int status = 0;
-    char * buff = __cxxabiv1::__cxa_demangle(to_demangle.c_str(), NULL, NULL, &status);
-    string demangled = buff;
-    free(buff);
-    return demangled;
-}
 
 void print_command(parsed_command temp)
 {
@@ -43,9 +34,9 @@ void print_command(parsed_command temp)
  		}
  		if(it.isOfType(typeid(bool)))
  		{
- 			cerr << endl << "bool = " << b2s(it.get<bool>()) << endl;
+ 			cerr << endl << "bool = " << Utils::b2s(it.get<bool>()) << endl;
  		}
- 		if(it.isOfType(typeid(string)))
+ 		if(it.isOfType(typeid(std::string)))
  		{
  			cerr << endl << "string = " << it.get<string>() << endl;
  		}
@@ -72,7 +63,7 @@ void print_command(parsed_command temp)
 
 parsed_command Client::get_parsed_command(string input)
 {
-	const type_info& _string = typeid(string);
+	const type_info& _string = typeid(std::string);
 	const type_info& _int = typeid(int);
 	const type_info& _double = typeid(double);
 	const type_info& _bool = typeid(bool);
@@ -135,7 +126,7 @@ parsed_command Client::get_parsed_command(string input)
 			command.cmd.clear();
 			return command;
 		}
-		if(it->second[i].isOfType(typeid(string)))
+		if(it->second[i].isOfType(typeid(std::string)))
 		{
 			if(i==n-1)	//quando o último argumento é uma string, põe tudo o resto no argumento string
 			{
@@ -176,14 +167,14 @@ parsed_command Client::get_parsed_command(string input)
 		place+=(1+buffer.size());
 		if(it->second[i].isOfType(typeid(bool)))
 		{
-			if(!is_bool(buffer))
+			if(!Utils::is_bool(buffer))
 			{
 				writeline(client_socket,"Argument "+to_string(i+1)+" (\""+buffer+"\") is not a bool.");
 				command.args.clear();
 				command.cmd.clear();
 				return command;
 			}
-			command.args[i]=s2b(buffer);
+			command.args[i]=Utils::s2b(buffer);
 			continue;
 		}
 		if(it->second[i].isOfType(typeid(int)))
@@ -370,7 +361,9 @@ bool Client::parse( string ins ) //true always except when "\quit" received.
 	}*/
 	catch(...)
 	{
-		clog("Caught an unknown error while parsing command=\"" << ins << "\" from socket "+to_string(client_socket)+". Exception type: \""+util_demangle(__cxxabiv1::__cxa_current_exception_type()->name())+"\"");
+		clog("Caught an unknown error while parsing command=\"" << ins << "\" from socket "+to_string(client_socket)+". Exception type: \""+
+																													 Utils::demangle(
+																															 __cxxabiv1::__cxa_current_exception_type()->name())+"\"");
 		Network::server().writeline(client_socket,"An error that wasn't supposed to have happened has occurred. Please contact the admin.");
 	}
 	return true;
@@ -465,7 +458,7 @@ void Client::regist(string login_name , string pass , string name , bool ad , in
 	PGresult* res;
 	stringstream query;
 	query << "BEGIN;" << endl;
-	query << "INSERT INTO users VALUES (DEFAULT,'" << name << "','" << login_name << "','" << pass << "'," << b2s(ad) << "," << cr << ");" << endl;
+	query << "INSERT INTO users VALUES (DEFAULT,'" << name << "','" << login_name << "','" << pass << "'," << Utils::b2s(ad) << "," << cr << ");" << endl;
 	query << "COMMIT;" << endl;
 	try
 	{
@@ -744,7 +737,7 @@ void Client::change_admin(int id, bool ad)
 	PGresult* res;
 	query << "BEGIN;";
 	query << "UPDATE users" << endl;
-	query << "SET admin = " << b2s(ad) << endl;
+	query << "SET admin = " << Utils::b2s(ad) << endl;
 	query << "WHERE user_id=" << id << ";";
 	query << "COMMIT;";
 	try
@@ -1558,12 +1551,12 @@ void Client::show_race_info(int r_i)
 	writeline(client_socket,"#horses="+to_string(get_num_horses_on_race(r_i)));
 	writeline(client_socket,"Laps="+to_string(get_race_laps(r_i)));
 	writeline(client_socket,"Time created="+get_race_date(r_i));
-	writeline(client_socket,"Started="+b2s(get_race_started(r_i)));
+	writeline(client_socket,"Started="+Utils::b2s(get_race_started(r_i)));
 	auto temp=races.find(r_i);
 	bool temp_b = temp==races.end()?false:true;
-	writeline(client_socket,"Active now="+b2s(temp_b));
+	writeline(client_socket,"Active now="+Utils::b2s(temp_b));
 	if(temp_b)
-		writeline(client_socket,"Finished="+b2s(temp->second->finished));
+		writeline(client_socket,"Finished="+Utils::b2s(temp->second->finished));
 	writeline(client_socket,"\r\nHorses on race:\r\n");
 	show_horses_on_race(r_i);
 }
@@ -1593,7 +1586,7 @@ bool Client::get_race_started(int r_i)
 		PQclear(res);
 		return false;
 	}
-	bool ret=s2b(PQgetvalue(res,0,0));
+	bool ret=Utils::s2b(PQgetvalue(res,0,0));
 	PQclear(res);
 	return ret;
 }
@@ -1874,7 +1867,7 @@ bool arg::set(const boost::any& st) {
 }
 
 template <typename T> T arg::get() const {
-	return any_cast<T>(this->data);
+	return boost::any::any_cast<T>(&data);
 }
 
 bool arg::isEmpty() const {

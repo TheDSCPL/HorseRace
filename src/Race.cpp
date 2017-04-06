@@ -56,7 +56,7 @@ Race::Race(int r_i , int l) : race_id(r_i) , laps(l) , bets(get_race_bets(r_i)),
 	stringstream query;
 	PGresult* res;
 
-	query << "UPDATE races SET started=" << b2s(true) << " WHERE race_id=" << race_id;
+	query << "UPDATE races SET started=" << Utils::b2s(true) << " WHERE race_id=" << race_id;
 
 	try
 	{

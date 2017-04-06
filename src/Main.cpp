@@ -5,11 +5,13 @@
 #include "../headers/Properties.hpp"
 #include "../headers/Client.hpp"
 #include "../headers/SHA.hpp"
+#include "../headers/Utils.hpp"
 
 #include <ctime>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <fstream>
+#include <stdarg.h>
 
 #ifndef vcout //verbose cout.
 #define vcout if(false) cout
@@ -30,7 +32,24 @@ int main(int argc, char *argv[])
 	cout.rdbuf()->pubsetbuf(NULL,0);
 	setvbuf ( stdout , NULL , _IONBF , 0 );
 
-	srand(time(NULL));
+    SQLServer::server().start();
+
+    string query = "SELECT * FROM users WHERE username = $1;";
+
+    SQLServer::server().requestNewPreparedStatement("printMe",query);
+
+    const PreparedStatement* preparedStatement = SQLServer::server().getPreparedStatement("printMe");
+
+    if(!preparedStatement) {
+        cerr << "NULL" << endl;
+        return 1;
+    }
+
+    SQLResult res = preparedStatement->run({"lpcsd"});
+
+    SQLServer::printResult(res.res,-1);
+
+    /*srand(time(NULL));
 
 	system("clear");
 
