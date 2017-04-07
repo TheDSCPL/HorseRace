@@ -32,7 +32,9 @@ int main(int argc, char *argv[])
 	cout.rdbuf()->pubsetbuf(NULL,0);
 	setvbuf ( stdout , NULL , _IONBF , 0 );
 
-    SQLServer::server().start();
+    cout << Utils::atod("-9.1234") << endl;
+
+    /*SQLServer::server().start();
 
     string query = "SELECT * FROM users WHERE username = $1;";
 
@@ -47,7 +49,7 @@ int main(int argc, char *argv[])
 
     SQLResult res = preparedStatement->run({"lpcsd"});
 
-    SQLServer::printResult(res.res,-1);
+    SQLServer::printResult(res.res,-1);*/
 
     /*srand(time(NULL));
 

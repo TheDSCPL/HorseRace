@@ -13,6 +13,46 @@
 
 using namespace std;
 
+//------------------------------------------ SQLResultTable::Tuple ------------------------------------------//
+
+Tuple::Tuple(/*SQLResultTable* parent, */const vector<string> &v) : /*table(parent),*/ values(v) {
+    //values.insert(values.begin(),v.begin(),v.end());
+}
+
+Tuple::Tuple(const Tuple & o) : /*table(o.table), */values(o.values) {}
+
+const std::vector<std::string>& Tuple::getValues() const {
+    return values;
+}
+
+string Tuple::getString(unsigned int index) const {
+    if(index < 0 || index >= values.size())
+        throw out_of_range("tuple");
+    return values.at(index);
+}
+
+int Tuple::getInt(unsigned int index) const {
+    if(index < 0 || index >= values.size())
+        throw out_of_range("tuple");
+    const string& s = values.at(index);
+    if(!Utils::isInt(s))
+        throw logic_error("Tried to get int but it's not int.");
+    return atoi(s.c_str());
+}
+
+double Tuple::getDouble(unsigned int index) const {
+    if(index < 0 || index >= values.size())
+        throw out_of_range("tuple");
+    const string& s = values.at(index);
+    return Utils::atod(s);
+}
+
+bool Tuple::getBool(unsigned int index) const {
+    if(index < 0 || index >= values.size())
+        throw out_of_range("tuple");
+    return Utils::s2b(values.at(index));
+}
+
 //------------------------------------------ SQLResultTable ------------------------------------------//
 
 SQLResultTable::SQLResultTable(PGresult* pGresult) : pGresult(pGresult) {
@@ -239,3 +279,5 @@ SQL_Error::SQL_Error(const std::string &) {}
 SQL_Error::~SQL_Error() {
     //PQclear(err);
 }
+
+TupleConversionError::TupleConversionError(const std::string &err) : logic_error(err) {}

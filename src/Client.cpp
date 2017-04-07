@@ -1867,7 +1867,8 @@ bool arg::set(const boost::any& st) {
 }
 
 template <typename T> T arg::get() const {
-	return boost::any::any_cast<T>(&data);
+    return any_cast<T>(data);
+	//return boost::any::any_cast<T>(data);
 }
 
 bool arg::isEmpty() const {

@@ -18,8 +18,20 @@
 #define SHOW 0
 #define HIDE 1
 
-class Tuple {
+class SQLResultTable;
 
+class Tuple {
+	friend class SQLResultTable;
+	Tuple(/*SQLResultTable*, */const std::vector<std::string>&);	//only SQLResultTable can use this constructor
+	const std::vector<std::string> values;
+	//SQLResultTable* table;
+public:
+	Tuple(const Tuple&);
+	const std::vector<std::string>& getValues() const;
+	std::string getString(unsigned int) const;
+	int getInt(unsigned int) const;
+	double getDouble(unsigned int) const;
+	bool getBool(unsigned int) const;
 };
 
 class SQLResultTable {
@@ -115,6 +127,11 @@ public:
 	SQL_Error(const std::string&);
 	~SQL_Error();
 	PGresult *err;
+};
+
+class TupleConversionError : std::logic_error {
+public:
+	TupleConversionError(const std::string& err);
 };
 
 #endif
