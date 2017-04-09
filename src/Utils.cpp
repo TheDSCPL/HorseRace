@@ -45,7 +45,15 @@ double Utils::tenPower(const long n) {
     return ret;
 }
 
-double Utils::atod(const std::string & s) {
+int Utils::max(int a, int b) {
+    return a>b?a:b;
+}
+
+unsigned long Utils::max(unsigned long a, unsigned long b) {
+    return a>b?a:b;
+}
+
+double Utils::stod(const std::string &s) {
     if(!isDouble(s))
         throw logic_error("Tried to get double but it's not double.");
 
@@ -71,6 +79,28 @@ double Utils::atod(const std::string & s) {
 
     if(dotIndex != s.length())
         ret*=10;
+
+    return minus?-ret:ret;
+}
+
+int Utils::stoi(const std::string &s) {
+    if(!isInt(s))
+        throw logic_error("Tried to get int but it's not int.");
+
+    int ret = 0;
+    /*if(dotIndex == s.npos)  //doesn't have a dot -> integer
+        return atoi(s.c_str());*/
+
+    bool minus = (*s.begin() == '-');
+
+    int pt = 1;
+
+    for(string::const_reverse_iterator rit = s.rbegin() ; rit != s.rend() ; rit++) {
+        if(isdigit(*rit)) {
+            ret += (pt*(*rit-'0'));
+            pt*=10;
+        }
+    }
 
     return minus?-ret:ret;
 }

@@ -76,9 +76,9 @@ string Properties::getProperty(const std::string& p) const {
 	return it->second;
 }
 
-list<string> Properties::getProperties() const {
+vector<string> Properties::getProperties() const {
 	//reloadIfNecessary();
-	list<string> ret;
+	vector<string> ret;
 	for(map<string,string>::const_iterator it = properties.begin(); it != properties.end(); it++)
 		ret.push_back(it->first);
 	return ret;

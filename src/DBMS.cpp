@@ -1,11 +1,9 @@
+#include <sstream>
+
 #include "../headers/DBMS.hpp"
 #include "../headers/Properties.hpp"
 #include "../headers/Log.hpp"
-#include "../headers/Client.hpp"
-#include "../headers/Sockets.hpp"
 #include "../headers/Utils.hpp"
-#include <sstream>
-#include <stdarg.h>
 
 #ifndef vcout //verbose cout.
 #define vcout if(false) cout
@@ -13,50 +11,90 @@
 
 using namespace std;
 
-//------------------------------------------ SQLResultTable::Tuple ------------------------------------------//
+//------------------------------------------ Tuple ------------------------------------------//
 
-Tuple::Tuple(/*SQLResultTable* parent, */const vector<string> &v) : /*table(parent),*/ values(v) {
+Tuple::Tuple(const vector<string*> &v) : values(v) {
     //values.insert(values.begin(),v.begin(),v.end());
+}
+
+Tuple::~Tuple() {
+    for(string* s : values)
+        if(s)
+            delete s;
 }
 
 Tuple::Tuple(const Tuple & o) : /*table(o.table), */values(o.values) {}
 
-const std::vector<std::string>& Tuple::getValues() const {
-    return values;
+vector<string> Tuple::getValues() const {
+    //create a copy of "values" and return it
+    vector<string> ret(values.size());
+    for(string* s : values)
+        ret.push_back(string(*s));
+    return ret;
 }
 
+//User must check if a value is NULL before trying to get the value
 string Tuple::getString(unsigned int index) const {
     if(index < 0 || index >= values.size())
         throw out_of_range("tuple");
-    return values.at(index);
+    return string(*values.at(index));
 }
 
+//User must check if a value is NULL before trying to get the value
 int Tuple::getInt(unsigned int index) const {
     if(index < 0 || index >= values.size())
         throw out_of_range("tuple");
-    const string& s = values.at(index);
-    if(!Utils::isInt(s))
+    const string* s = values.at(index);
+    if(!Utils::isInt(*s))
         throw logic_error("Tried to get int but it's not int.");
-    return atoi(s.c_str());
+    return atoi(s->c_str());
 }
 
+//User must check if a value is NULL before trying to get the value
 double Tuple::getDouble(unsigned int index) const {
     if(index < 0 || index >= values.size())
         throw out_of_range("tuple");
-    const string& s = values.at(index);
-    return Utils::atod(s);
+    const string* s = values.at(index);
+    return Utils::stod(*s);
 }
 
+//User must check if a value is NULL before trying to get the value
 bool Tuple::getBool(unsigned int index) const {
     if(index < 0 || index >= values.size())
         throw out_of_range("tuple");
-    return Utils::s2b(values.at(index));
+    return Utils::s2b(*values.at(index));
 }
 
 //------------------------------------------ SQLResultTable ------------------------------------------//
 
-SQLResultTable::SQLResultTable(PGresult* pGresult) : pGresult(pGresult) {
+SQLResultTable::SQLResultTable(const PGresult *pGresult) : tuples(getTuplesFromPGresult(pGresult)),
+                                                           columnNames(getColumnNamesFromPGresult(pGresult)),
+                                                           printedTable(getPrintedTable(pGresult)) {}
 
+vector<Tuple*> SQLResultTable::getTuplesFromPGresult(const PGresult *pgr) {
+    unsigned long n = (unsigned long)Utils::max(PQntuples(pgr),0);
+    unsigned long columns = (unsigned long)Utils::max(PQnfields(pgr),0);
+    vector<Tuple*> ret(n);
+    for(int i = 0; i<n ; i++) {
+        vector<string*> t(columns);
+        for(int j = 0 ; j<columns ; j++)
+        {
+            if(PQgetisnull(pgr,i,j))
+                t.push_back(NULL);
+            else
+                t.push_back(new string(PQgetvalue(pgr,i,j)));
+        }
+        ret.push_back(new Tuple(t));
+    }
+    return ret;
+}
+
+vector<std::string> SQLResultTable::getColumnNamesFromPGresult(const PGresult *pgr) {
+    unsigned long columns = (unsigned long)Utils::max(PQnfields(pgr),0);
+    vector<string> ret(columns);
+    for(int i = 0; i<columns ; i++)
+        ret.push_back(PQfname(pgr,i));
+    return ret;
 }
 
 SQLResultTable::~SQLResultTable() {
@@ -64,86 +102,93 @@ SQLResultTable::~SQLResultTable() {
         if(t)
             delete t;
     }
-    //PQclear(pGresult);    //SQLResultTable should NOT clear the PGresult because it's not its owner. The responsible party for clearing the pointer is SQLResult!
 }
 
-const std::vector<Tuple*> SQLResultTable::getTuples() const {
-    return tuples;
-}
-
-int SQLResultTable::getNumberOfTuples() const {
-    auto err = PQresultStatus(pGresult);
-    return (err == PGRES_COMMAND_OK || err == PGRES_TUPLES_OK) ? PQntuples(pGresult) : 0;
-}
-
-int SQLResultTable::getNumberOfColumns() const {
-    auto err = PQresultStatus(pGresult);
-    return (err == PGRES_COMMAND_OK || err == PGRES_TUPLES_OK) ? PQnfields(pGresult) : 0;
-}
-
-const char* SQLResultTable::getColumnName(unsigned int n) const {
-    return PQfname(pGresult,n);
-}
-
-std::vector<std::string> SQLResultTable::getColumnNames() const {
-    vector<string> ret;
-    for(unsigned int i = 0 ; i<getNumberOfColumns() ; i++) {
-        ret.push_back(getColumnName(i));
-    }
+vector<Tuple*> SQLResultTable::copyTuplesVector(vector<Tuple *> origin) {
+    vector<Tuple*> ret(origin.size());
+    for(Tuple* t : origin)
+        ret.push_back(new Tuple(*t));
     return ret;
+}
+
+std::string SQLResultTable::getPrintedTable(const PGresult * pgr) {
+    char *out;
+    size_t size; //not important. contains the size of the out string
+
+    FILE *temp = open_memstream(&out, &size);
+
+    PQprintOpt opts = {0};
+    opts.header = 1;    //don't show the number of rows
+    opts.align = 1;
+    opts.fieldSep = (char *) "|";
+
+    PQprint(temp, pgr, &opts);
+
+    fclose(temp);
+    string ret(out);
+    free(out);
+    return ret;
+}
+
+SQLResultTable::SQLResultTable(SQLResultTable const & origin) : tuples(copyTuplesVector(origin.tuples)),
+                                                                columnNames(origin.columnNames) {}
+
+unsigned long SQLResultTable::getNumberOfTuples() const {
+    return tuples.size();
+    //auto err = PQresultStatus(pGresult);
+    //return (err == PGRES_COMMAND_OK || err == PGRES_TUPLES_OK) ? PQntuples(pGresult) : 0;
+}
+
+unsigned long SQLResultTable::getNumberOfColumns() const {
+    return columnNames.size();
+    //auto err = PQresultStatus(pGresult);
+    //return (err == PGRES_COMMAND_OK || err == PGRES_TUPLES_OK) ? PQnfields(pGresult) : 0;
+}
+
+string SQLResultTable::getColumnName(unsigned int n) const {
+    return n >= getNumberOfColumns() ? NULL : columnNames.at(n);
+}
+
+const vector<string>& SQLResultTable::getColumnNames() const {
+    return columnNames;
 }
 
 bool SQLResultTable::isEmpty() const {
     return !getNumberOfTuples();
 }
 
-void SQLResultTable::print(const int client_socket, const bool hide_num_rows = true) const {
-    char *out;
-    size_t size; //not important. contains the size of the out string
-    FILE *temp = open_memstream(&out, &size);
-    PQprintOpt opts = {0};
-
-    opts.header = !hide_num_rows;
-    opts.align = 1;
-    opts.fieldSep = (char *) "|";
-
-
-    PQprint(temp, pGresult, &opts);
-    fclose(temp);
-    Network::server().writeline(client_socket, "");
-    Network::server().writeline(client_socket, out, false);
-    free(out);
-}
-
-void SQLResultTable::print(std::ostream &outStream, const bool hide_num_rows) const {
-    char *out;
-    size_t size; //not important. contains the size of the out string
-    FILE *temp = open_memstream(&out, &size);
-    PQprintOpt opts = {0};
-
-    opts.header = !hide_num_rows;
-    opts.align = 1;
-    opts.fieldSep = (char *) "|";
-
-
-    PQprint(temp, pGresult, &opts);
-
-    outStream << endl << out;
-
-    fclose(temp);
-    free(out);
+void SQLResultTable::print(std::ostream &outStream) const {
+    outStream << printedTable;
 }
 
 //------------------------------------------ SQLResult ------------------------------------------//
 
-SQLResult::SQLResult(PGresult * r) : res(r), isCopy(false) {}
-
-SQLResult::~SQLResult() {
-    PQclear(res);
+SQLResult::SQLResult(PGresult * r) : cmdMessage(PQcmdStatus(r)),
+                                     status(PQresultStatus(r)),
+                                     errorMessage(PQresultErrorMessage(r)),
+                                     resultTable(SQLResultTable(r)) {
+    PQclear(r);
 }
 
-SQLResult::SQLResult(SQLResult const& origin) : res(origin.res), isCopy(true) {
+SQLResult::~SQLResult() {
+    //PQclear(res);
+}
 
+SQLResult::SQLResult(SQLResult const& origin) : cmdMessage(origin.cmdMessage),
+                                                status(origin.status),
+                                                errorMessage(origin.errorMessage),
+                                                resultTable(origin.resultTable) {}
+
+std::string SQLResult::getCommandMessage() const {
+    return cmdMessage;
+}
+
+std::string SQLResult::getErrorMessage() const {
+    return errorMessage;
+}
+
+const SQLResultTable& SQLResult::getResultTable() const {
+    return resultTable;
 }
 
 //------------------------------------------ PreparedStatement ------------------------------------------//
@@ -152,8 +197,12 @@ PreparedStatement::PreparedStatement(string const &name, string const &declarati
                                                                                       declaration(declaration),
                                  argsConcat((char**)malloc(Utils::getNumberOfArgs(declaration)*sizeof(char*))) {
     if (!S.getPreparedStatement(name)) {
-        PQprepare(S.conn, name.c_str(), declaration.c_str(), Utils::getNumberOfArgs(declaration), NULL);
-        S.preparedStatements.insert(pair<string, PreparedStatement *>(name, this));
+        ExecStatusType r = PQresultStatus(PQprepare(S.conn, name.c_str(), declaration.c_str(), Utils::getNumberOfArgs(declaration), NULL));
+        if(r != PGRES_COMMAND_OK && r != PGRES_TUPLES_OK) {
+            throw SQL_Error(PQerrorMessage(SQLServer::server().conn));
+        }
+        S.preparedStatements.insert(make_pair(name,this));
+        //S.preparedStatements.insert(pair<string, PreparedStatement *>(name, this));
     }
 }
 
@@ -187,7 +236,7 @@ SQLServer::~SQLServer() //destrutor
 }
 
 void SQLServer::start() {
-    if (PQstatus(conn) == CONNECTION_OK)
+    if (conn && PQstatus(conn) != CONNECTION_BAD)
         return;
 
     clog("Starting SQL server");
@@ -220,8 +269,14 @@ void SQLServer::start() {
 }
 
 void SQLServer::stop() {
-    if (PQstatus(conn) == CONNECTION_OK)
+    if (PQstatus(conn) != CONNECTION_BAD)
         PQfinish(conn);
+    conn = NULL;
+    for(auto ps : preparedStatements) {
+        if(ps.second)
+            delete(ps.second);
+    }
+    preparedStatements.clear();
     clog("SQL server stopped");
 }
 
@@ -250,7 +305,7 @@ void SQLServer::printResult(PGresult *result, int client_socket, int hide_num_ro
     fclose(temp);
     //Network::server().writeline(client_socket, "");
     //Network::server().writeline(client_socket, out, false);
-    cout << "printing: " << endl << PQerrorMessage(S.conn) << out << endl;
+    cout << "printing: " << endl << PQerrorMessage(S.conn) << endl << out << endl;
     free(out);
 }
 
@@ -258,7 +313,7 @@ void SQLServer::requestNewPreparedStatement(std::string const &name, std::string
     if(getPreparedStatement(name))
         return;
     new PreparedStatement(name,declaration);    //the new is VERY important because it makes the this pointer (saved in the map of PreparedStatement*'s) be permanent until the delete instruction. The constructor automatically adds the object to the map.
-    cerr << PQerrorMessage(S.conn) << "\n";
+    //cerr << PQerrorMessage(S.conn) << "\n";
 }
 
 const PreparedStatement *SQLServer::getPreparedStatement(std::string const &name) const {
@@ -267,6 +322,8 @@ const PreparedStatement *SQLServer::getPreparedStatement(std::string const &name
         return NULL;
     return it->second;
 }
+
+//------------------------------------------ SQL_Error ------------------------------------------//
 
 SQL_Error::SQL_Error(PGresult *e) : err(e) {}
 
@@ -279,5 +336,7 @@ SQL_Error::SQL_Error(const std::string &) {}
 SQL_Error::~SQL_Error() {
     //PQclear(err);
 }
+
+//------------------------------------------ TupleConversionError ------------------------------------------//
 
 TupleConversionError::TupleConversionError(const std::string &err) : logic_error(err) {}

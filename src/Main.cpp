@@ -32,11 +32,11 @@ int main(int argc, char *argv[])
 	cout.rdbuf()->pubsetbuf(NULL,0);
 	setvbuf ( stdout , NULL , _IONBF , 0 );
 
-    cout << Utils::atod("-9.1234") << endl;
+    //cout << Utils::stod("-9.1234") << endl;
 
-    /*SQLServer::server().start();
+    SQLServer::server().start();
 
-    string query = "SELECT * FROM users WHERE username = $1;";
+    string query = "SELECT * FROM test1 WHERE p_key = $1;";
 
     SQLServer::server().requestNewPreparedStatement("printMe",query);
 
@@ -47,9 +47,9 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    SQLResult res = preparedStatement->run({"lpcsd"});
+    SQLResult res = preparedStatement->run({"1"});
 
-    SQLServer::printResult(res.res,-1);*/
+    res.getResultTable().print(cout);
 
     /*srand(time(NULL));
 

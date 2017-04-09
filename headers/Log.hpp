@@ -2,12 +2,7 @@
 #define LOG_HPP 1
 
 #include <iostream>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <ctime>
 #include <fstream>
-#include <sstream>
 
 
 /*

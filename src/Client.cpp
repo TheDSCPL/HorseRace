@@ -7,6 +7,7 @@
 #include "../headers/Log.hpp"
 #include "../headers/Utils.hpp"
 #include "../headers/Constants.hpp"
+#include "../headers/Properties.hpp"
 #include <cctype>
 #include <string>
 
@@ -326,7 +327,7 @@ bool Client::parse( string ins ) //true always except when "\quit" received.
 		else if(command.cmd=="\\show_race_info")		{show_race_info(command.args[0].get<int>());}
 		else if(command.cmd=="\\show_bets")	 			{show_user_bets(user_id,command.args[0].get<int>());}
 		else if(command.cmd=="\\show_bets_other")	 	{show_user_bets(command.args[0].get<int>(),command.args[1].get<int>());}
-		else if(command.cmd=="\\show_server_ip")		{writeline(client_socket,"Server_IP: " + string(Network::server().get_ip(Network::server().sockfd)) + ":" + to_string(PORT));}
+		else if(command.cmd=="\\show_server_ip")		{writeline(client_socket,"Server_IP: " + string(Network::server().get_ip(Network::server().sockfd)) + ":" + Properties::getDefault().getProperty("PORT"));}
 		//else if(command.cmd=="\\")	 					{}
 	}
 	catch(SQL_Error e)
@@ -388,7 +389,7 @@ bool check_valid(string pa)
 Client::Client(int so) : client_socket(so), user_id(LOGGED_OFF)
 {
 	vcout << "constructor " << client_socket << endl;
-	Network::server().clients.insert(PAIR(client_socket,LOGGED_OFF));
+	Network::server().clients.insert(make_pair(client_socket,LOGGED_OFF));
 
 	if(client_socket>0)
 	{

@@ -1,10 +1,6 @@
 #ifndef SOCKETS_HPP
 #define SOCKETS_HPP 1
 
-//#ifndef Network::server()
-//#define Network::server() Network::server() //I know I'm lazy. I love it. Don't judge.
-//#endif
-
 //--------------------------INCLUDES--------------------------//
 
 #include <iostream> // cout
@@ -23,95 +19,83 @@
 #include <set>
 
 //--------------------------DEFINE--------------------------//
-#define BUFFER_SIZE (1025)
-//#define BUFFER_SIZE (2)
-#define PORT (2013)
-#define PAIR pair<int,int>
-#define P pair<string,*void(int,...)
+//TODO: Deprecated!! Both of these defines. Actually, remove EVERY SINGLE DEFINE!
 #define LOCK pthread_mutex_lock(&cout_mutex);
 #define UNLOCK pthread_mutex_unlock(&cout_mutex);
-#define endl "\r" << endl
-
-//--------------------------USING NAMESPACES--------------------------//
-using namespace std;
 
 //--------------------------TYPEDEFS--------------------------//
 //typedef struct tm TM; //already inside client.hpp
 
+//TODO: Deprecated!! Take this off of the global namespace, dumbass!
 extern pthread_mutex_t cout_mutex;
 
 //--------------------------CLASSES--------------------------//
-class Network
-{
+class Network {
 
-  //Singleton
+    //Singleton
 private:
-  Network();
+    Network();
 
-  ~Network();
+    ~Network();
 
-  Network(Network const&);              // Don't Implement
-  void operator=(Network const&); // Don't implement
-
-public:
-  static Network& server() //to use this class
-  {
-    static Network l;
-    return l;
-  }
+    Network(Network const &);              // Don't Implement
+    void operator=(Network const &); // Don't implement
 
 public:
+    static Network &server() //to use this class
+    {
+        static Network l;
+        return l;
+    }
 
-  map<int,int> clients; //key=socket, value=user_id if logged and LOGGED_OFF if not
+public:
 
-  set<pthread_t> socket_threads;
-  
-  int sockfd;
+    std::map<int, int> clients; //key=socket, value=user_id if logged and LOGGED_OFF if not
 
-  void start_server();
+    std::set<pthread_t> socket_threads;
 
-  void shutdown_server();
+    int sockfd;
 
-  void writeline(int socketfd, string line,bool paragraph=true);
+    void start_server();
 
-  void broadcast (int origin, string text);
+    void shutdown_server();
 
-  bool readline(int socketfd, string &line);
+    void writeline(int socketfd, std::string line, bool paragraph = true);
 
-  bool srv_running()
-  {
-    return server_running;
-  }
+    void broadcast(int origin, std::string text);
 
-  char* get_ip(int);
+    bool readline(int socketfd, std::string &line);
+
+    bool srv_running() {
+        return server_running;
+    }
+
+    char *get_ip(int);
 
 private:
 
-  int newsockfd, port;
-  socklen_t client_addr_length;
-  struct sockaddr_in serv_addr, cli_addr;
-  bool server_running,Flag_shutdown;
-  pthread_t server_t;
+    int newsockfd;
+    socklen_t client_addr_length;
+    struct sockaddr_in serv_addr, cli_addr;
+    bool server_running, Flag_shutdown;
+    pthread_t server_t;
 
-	void server_routine();
+    void server_routine();
 
-	static void* server_routine_redirect(void* t)
-	{
-    //vcout << "server_redirect" << endl;
-		((Network*)t)->server_routine();
-		return NULL;
-	}
+    static void *server_routine_redirect(void *t) {
+        //vcout << "server_redirect" << endl;
+        ((Network *) t)->server_routine();
+        return NULL;
+    }
 
-  void cliente();
+    void cliente();
 
-  static void* cliente_redirect(void* c)
-  { //http://stackoverflow.com/a/1151615
-    //vcout << "Client_redirect" << endl;
-    ((Network*)c)->cliente();
-    return NULL;
-  }
+    static void *cliente_redirect(void *c) { //http://stackoverflow.com/a/1151615
+        //vcout << "Client_redirect" << endl;
+        ((Network *) c)->cliente();
+        return NULL;
+    }
 };
-
 
 
 #endif

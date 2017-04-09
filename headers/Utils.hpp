@@ -9,9 +9,16 @@ namespace Utils {
 
     double tenPower(const long);
 
-    // Same as atoi but for double.
+    int max(int a, int b);
+
+    unsigned long max(unsigned long a, unsigned long b);
+
+    // Converts a string to double.
+    // Throws logic_error if the string isn't a double
     // Only use dots (".") for separating integer part from decimal part.
-    double atod(const std::string&);
+    double stod(const std::string &);
+
+    int stoi(const std::string &s);
 
     // If the string is empty, returns true. Can consider negative numbers
     bool isInt(const std::string&);

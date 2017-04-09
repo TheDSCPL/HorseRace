@@ -1,4 +1,8 @@
 #define LOG_CPP 1
+
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sstream>
 #include "../headers/Log.hpp"
 
 string next_log_name(string beggining,string path="");

@@ -1,8 +1,8 @@
 #include <exception>
 #include <string>
 #include <map>
-#include <list>
 #include <fstream>
+#include <vector>
 
 class Properties
 {
@@ -15,7 +15,7 @@ public:
 	~Properties();
 	void reload();
 	std::string getProperty(const std::string&) const;
-	std::list<std::string> getProperties() const;
+	std::vector<std::string> getProperties() const;
 	static const Properties& getDefault();
 };
 

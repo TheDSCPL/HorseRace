@@ -2,7 +2,6 @@
 #define _RACE_HPP_ 1
 #include <map>
 #include <string>
-#include <vector>
 #include <set>
 
 #define MIN_HORSES_ON_RACE (3)
