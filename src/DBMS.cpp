@@ -187,6 +187,15 @@ std::string SQLResult::getErrorMessage() const {
     return errorMessage;
 }
 
+bool SQLResult::hasError() const {
+    return errorMessage.size() > 0 || status == PGRES_BAD_RESPONSE || status == PGRES_NONFATAL_ERROR ||
+           status == PGRES_FATAL_ERROR;
+}
+
+bool SQLResult::hasTableResult() const {
+    return status == PGRES_TUPLES_OK;
+}
+
 const SQLResultTable& SQLResult::getResultTable() const {
     return resultTable;
 }
