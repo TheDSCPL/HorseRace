@@ -49,7 +49,13 @@ int main(int argc, char *argv[])
 
     SQLResult res = preparedStatement->run({"1"});
 
-    res.getResultTable().print(cout);
+    cout << res;
+
+    //res.getResultTable().print(cout,false);
+
+    /*cout << Utils::b2s(res.hasError()) << " " << res.getErrorMessage() << endl;
+
+    res.getResultTable().print(cout);*/
 
     /*srand(time(NULL));
 

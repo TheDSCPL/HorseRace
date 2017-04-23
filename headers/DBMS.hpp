@@ -6,14 +6,10 @@
 #endif
 
 #include <postgresql/libpq-fe.h>
-//#include <iostream>
 #include <string>
-//#include <stdlib.h>
-//#include <stdio.h>
-//#include <string.h> //strdup
-//#include <algorithm>
 #include <vector>
 #include <map>
+#include <iostream>
 
 #define SHOW 0
 #define HIDE 1
@@ -22,10 +18,10 @@ class SQLResultTable;
 
 class Tuple {
 	friend class SQLResultTable;
-	Tuple(/*SQLResultTable*, */const std::vector<std::string*>&);	//only SQLResultTable can use this constructor
+
+    Tuple(const std::vector<std::string *> &);    //only SQLResultTable can use this constructor
     ~Tuple();
 	const std::vector<std::string*> values;
-	//SQLResultTable* table;
 public:
 	Tuple(const Tuple&);
 	std::vector<std::string> getValues() const;
@@ -57,7 +53,11 @@ public:
 	const std::vector<std::string>& getColumnNames() const;
 	bool isEmpty() const;
 
-	void print(std::ostream& out) const;
+    void print(std::ostream &out, bool showNumRows = true) const;
+
+    operator const char *() const {
+        return printedTable.c_str();
+    }
 };
 
 class SQLResult {
@@ -83,12 +83,24 @@ public:
     std::string getErrorMessage() const;
     bool hasError() const;
     bool hasTableResult() const;
+
+    operator const char *() const {
+        if (hasError())
+            return getErrorMessage().c_str();
+        else if (hasTableResult())
+            return getResultTable();
+        else
+            return getCommandMessage().c_str();
+    }
 };
 
 class PreparedStatement
 {
 	friend class SQLServer;
-	char ** const argsConcat;	//used only in the "run" method. I'll save it in the object so I don't need to allocate memory every time I call the function. This pointer can definitely be reused by each object and doesn't need to be allocated every time the "run" method is run.
+
+    //char ** argsConcat;   //if I delete this FOR SOME WITCHCRAFT the compilation fails. This is doing nothing
+    //char** aasdfksgiasdhf;
+    char **const _temp;    //used only in the "run" method. I'll save it in the object so I don't need to allocate memory every time I call the function. This pointer can definitely be reused by each object and doesn't need to be allocated every time the "run" method is run.
 
 	PreparedStatement (std::string const& name, std::string const& declaration);
 	~PreparedStatement();
@@ -103,7 +115,6 @@ public:
 
 class SQLServer
 {
-public:
 	PGconn* conn = NULL;
 	std::map<std::string const,PreparedStatement const*> preparedStatements;
 

@@ -1,4 +1,6 @@
 #include <sstream>
+#include <boost/regex.hpp>
+#include <regex>
 
 #include "../headers/DBMS.hpp"
 #include "../headers/Properties.hpp"
@@ -111,7 +113,7 @@ vector<Tuple*> SQLResultTable::copyTuplesVector(vector<Tuple *> origin) {
     return ret;
 }
 
-std::string SQLResultTable::getPrintedTable(const PGresult * pgr) {
+string SQLResultTable::getPrintedTable(const PGresult *pgr) {
     char *out;
     size_t size; //not important. contains the size of the out string
 
@@ -157,8 +159,15 @@ bool SQLResultTable::isEmpty() const {
     return !getNumberOfTuples();
 }
 
-void SQLResultTable::print(std::ostream &outStream) const {
-    outStream << printedTable;
+void SQLResultTable::print(ostream &outStream, bool showNumRows) const {
+    showNumRows |= true;
+    if (showNumRows)
+        outStream << printedTable;
+    else {
+        //regex matches("^\\s*[(]\\d+ rows[)]\\s*$");
+        //matches.assign("/^\\w*[(]0 rows[)]\\s*/gm");
+        //outStream << regex_replace(printedTable,matches,"");
+    }
 }
 
 //------------------------------------------ SQLResult ------------------------------------------//
@@ -204,7 +213,10 @@ const SQLResultTable& SQLResult::getResultTable() const {
 
 PreparedStatement::PreparedStatement(string const &name, string const &declaration) : name(name),
                                                                                       declaration(declaration),
-                                 argsConcat((char**)malloc(Utils::getNumberOfArgs(declaration)*sizeof(char*))) {
+                                                                                      _temp((char **) malloc(
+                                                                                              Utils::getNumberOfArgs(
+                                                                                                      declaration) *
+                                                                                              sizeof(char *))) {
     if (!S.getPreparedStatement(name)) {
         ExecStatusType r = PQresultStatus(PQprepare(S.conn, name.c_str(), declaration.c_str(), Utils::getNumberOfArgs(declaration), NULL));
         if(r != PGRES_COMMAND_OK && r != PGRES_TUPLES_OK) {
@@ -220,13 +232,15 @@ SQLResult PreparedStatement::run(const std::vector<std::string> &args) const {
     if(args.size() != n)
         throw SQL_Error("Prepared statement's arguments don't match the number of arguments that the prepared statement should receive.");
     for(int i = 0 ; i < n ; i++)
-        argsConcat[i] = (char*)args[i].c_str();
+        _temp[i] = (char *) args[i].c_str();
 
-    return SQLResult( PQexecPrepared(SQLServer::server().conn,name.c_str(),n,(const char* const*)argsConcat,NULL,NULL,0) );
+    return SQLResult(
+            PQexecPrepared(SQLServer::server().conn, name.c_str(), n, (const char *const *) _temp, NULL, NULL, 0));
 }
 
 PreparedStatement::~PreparedStatement() {
-    free(argsConcat);
+    if (_temp)
+        free(_temp);
 }
 
 //------------------------------------------ SQLServer ------------------------------------------//
@@ -286,7 +300,7 @@ void SQLServer::stop() {
             delete(ps.second);
     }
     preparedStatements.clear();
-    clog("SQL server stopped");
+    //clog("SQL server stopped");
 }
 
 PGresult *SQLServer::executeSQL(string const &sql) {
@@ -314,7 +328,7 @@ void SQLServer::printResult(PGresult *result, int client_socket, int hide_num_ro
     fclose(temp);
     //Network::server().writeline(client_socket, "");
     //Network::server().writeline(client_socket, out, false);
-    cout << "printing: " << endl << PQerrorMessage(S.conn) << endl << out << endl;
+    cout << PQerrorMessage(S.conn) << endl << out << endl;
     free(out);
 }
 

@@ -1,4 +1,11 @@
+#ifndef UTILS_H
+#define UTILS_H
+
 #include <string>
+
+std::string operator+(const std::string &s, int i);
+
+std::string operator+(int i, const std::string &s);
 
 namespace Utils {
     bool is_bool(std::string const &);
@@ -30,5 +37,7 @@ namespace Utils {
 
     std::string demangle(std::string const&);
 
-    unsigned int getNumberOfArgs(std::string const&);
+    unsigned long getNumberOfArgs(std::string const &);
 }
+
+#endif

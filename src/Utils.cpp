@@ -4,8 +4,13 @@
 #include <cctype>
 #include <stdexcept>
 #include <iostream>
+#include <set>
 
 using namespace std;
+
+std::string operator+(const std::string &s, int i) { return s + std::to_string(i); }
+
+std::string operator+(int i, const std::string &s) { return std::to_string(i) + s; }
 
 bool Utils::is_bool(string const &s)
 {
@@ -153,16 +158,24 @@ string Utils::demangle(string const& to_demangle)	//to know what was the unknow 
     return demangled;
 }
 
-unsigned int Utils::getNumberOfArgs(std::string const & query) {
-    int count = 0;
+unsigned long Utils::getNumberOfArgs(std::string const &query) {
+    if (query.empty())
+        return 0;
     query.length();
+    set<int> args;
     for(int i = 0 ; i<query.length()-1 /*the last character is never an argument so -1*/ ; i++) {
         if(query[i] == '$') {
-            if(isdigit(query[i+1])) {
-                count++;
+            string n;
+            while (isdigit(query[i + 1])) {
+                n += query[i + 1];
+                i++;
             }
-            i++; //yes, I want to increment i by 2 in this case because if I find a dollar sign, than the next character will never be an argument
+            if (!n.empty()) {
+                args.insert(atoi(n.c_str()));
+            } else {
+                i++; //yes, I want to increment i by 2 in this case because if I find an empty dollar sign, than the next character will never be an argument
+            }
         }
     }
-    return count;
+    return args.size();
 }

@@ -24,8 +24,30 @@ public:
     static vector<arg>& getCommands();
 }*/
 
-class Client
-{
+class Client {
+    const static std::string getUserId;
+    const static std::string checkUserAndPass;
+    const static std::string changePassword;
+    const static std::string changeAdmin;
+    const static std::string getHorseId;
+    const static std::string insertHorse;
+    const static std::string insertHorseInRace;
+    const static std::string insertRace;
+    const static std::string getLatestRaceId;
+    const static std::string checkRaceExists;
+    const static std::string checkHorseExists;
+    const static std::string checkUserExists;
+    const static std::string getUserCredits;
+    const static std::string getRaceDate;
+    const static std::string getNumHorsesOnRace;
+    const static std::string getHorsesOnRace;
+    const static std::string checkBetExists;
+    const static std::string addCredits;
+    const static std::string checkRaceStarted;
+    const static std::string removeBet;
+    const static std::string changeBet;
+
+    void static initPreparedStatements();
 public:
     int client_socket;
 

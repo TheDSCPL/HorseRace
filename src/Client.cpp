@@ -20,6 +20,208 @@ using namespace Constants;
 #define vcout if(false) cout
 #endif
 
+const std::string Client::getUserId = "GET_USER_ID";
+const std::string Client::checkUserAndPass = "CHECK_USER_AND_PASS";
+const std::string Client::changePassword = "CHANGE_PASSWORD";
+const std::string Client::changeAdmin = "CHANGE_ADMIN";
+const std::string Client::getHorseId = "GET_HORSE_ID";
+const std::string Client::insertHorse = "INSERT_HORSE";
+const std::string Client::insertHorseInRace = "INSERT_HORSE_IN_RACE";
+const std::string Client::insertRace = "INSERT_RACE";
+const std::string Client::getLatestRaceId = "GET_LATEST_RACE_ID";
+const std::string Client::checkRaceExists = "CHECK_RACE_EXISTS";
+const std::string Client::checkUserExists = "CHECK_USER_EXISTS";
+const std::string Client::checkHorseExists = "CHECK_HORSE_EXISTS";
+const std::string Client::getUserCredits = "GET_USER_CREDITS";
+const std::string Client::getRaceDate = "GET_RACE_DATE";
+const std::string Client::getNumHorsesOnRace = "GET_NUM_HORSES_ON_RACE";
+const std::string Client::getHorsesOnRace = "GET_HORSES_ON_RACE";
+const std::string Client::checkBetExists = "CHECK_BET_EXISTS";
+const std::string Client::addCredits = "ADD_CREDITS";
+const std::string Client::checkRaceStarted = "CHECK_RACE_STARTED";
+const std::string Client::removeBet = "REMOVE_BET";
+const std::string Client::changeBet = "CHANGE_BET";
+
+void Client::initPreparedStatements() {
+	//login_name
+	if (!S.getPreparedStatement(getUserId)) {
+		stringstream query;
+		query << "BEGIN;";
+		query << "SELECT user_id, name" << endl;
+		query << "FROM users" << endl;
+		query << "WHERE username = $1;";
+		query << "COMMIT;";
+		S.requestNewPreparedStatement(getUserId, query.str());
+	}
+	//user_id, hashed_pass
+	if (!S.getPreparedStatement(checkUserAndPass)) {
+		stringstream query;
+		query << "BEGIN;";
+		query << "SELECT user_id, name" << endl;
+		query << "FROM users" << endl;
+		query << "WHERE user_id = $1 AND pass = $2;" << endl;
+		query << "COMMIT;";
+		S.requestNewPreparedStatement(checkUserAndPass, query.str());
+	}
+	//new_pass, user_id, old_pass
+	if (!S.getPreparedStatement(changePassword)) {
+		stringstream query;
+		query << "BEGIN;";
+		query << "UPDATE users" << endl;
+		query << "SET pass = $1" << endl;
+		query << "WHERE user_id = $2 AND pass = $3;";
+		query << "COMMIT;";
+		S.requestNewPreparedStatement(changePassword, query.str());
+	}
+	//admin(boolean as string), user_id
+	if (!S.getPreparedStatement(changeAdmin)) {
+		stringstream query;
+		query << "BEGIN;";
+		query << "UPDATE users" << endl;
+		query << "SET admin = $1" << endl;
+		query << "WHERE user_id = $2;";
+		query << "COMMIT;";
+		S.requestNewPreparedStatement(changeAdmin, query.str());
+	}
+	//horse_name
+	if (!S.getPreparedStatement(getHorseId)) {
+		stringstream query;
+		query << "BEGIN;";
+		query << "SELECT horse_id" << endl;
+		query << "FROM horses" << endl;
+		query << "WHERE name = $1;";
+		query << "COMMIT;";
+		S.requestNewPreparedStatement(getHorseId, query.str());
+	}
+	//horse_name, speed
+	if (!S.getPreparedStatement(insertHorse)) {
+		stringstream query;
+		query << "BEGIN;" << endl;
+		query << "INSERT INTO horses VALUES (DEFAULT,$1,$2);" << endl;
+		query << "COMMIT;" << endl;
+		S.requestNewPreparedStatement(insertHorse, query.str());
+	}
+	//horse_id, race_id, state
+	if (!S.getPreparedStatement(insertHorseInRace)) {
+		stringstream query;
+		query << "BEGIN;" << endl;
+		query << "INSERT INTO are_on VALUES ($1,$2,$3,NULL);" << endl;
+		query << "COMMIT;" << endl;
+		S.requestNewPreparedStatement(insertHorseInRace, query.str());
+	}
+	//laps
+	if (!S.getPreparedStatement(insertRace)) {
+		stringstream query;
+		query << "BEGIN;" << endl;
+		query << "INSERT INTO races VALUES ($1,DEFAULT,DEFAULT,DEFAULT);" << endl;
+		query << "COMMIT;" << endl;
+		S.requestNewPreparedStatement(insertRace, query.str());
+	}
+	//
+	if (!S.getPreparedStatement(getLatestRaceId)) {
+		stringstream query;
+		query << "SELECT race_id" << endl;
+		query << "FROM races" << endl;
+		query << "ORDER BY race_id DESC" << endl;
+		query << "LIMIT 1;" << endl;
+		S.requestNewPreparedStatement(getLatestRaceId, query.str());
+	}
+	//race_id
+	if (!S.getPreparedStatement(checkRaceExists)) {
+		stringstream query;
+		query << "SELECT race_id" << endl;
+		query << "FROM races" << endl;
+		query << "WHERE race_id = $1;";
+		S.requestNewPreparedStatement(checkRaceExists, query.str());
+	}
+	//horse_id
+	if (!S.getPreparedStatement(checkHorseExists)) {
+		stringstream query;
+		query << "SELECT horse_id" << endl;
+		query << "FROM horses" << endl;
+		query << "WHERE horse_id = $1;";
+		S.requestNewPreparedStatement(checkHorseExists, query.str());
+	}
+	//user_id
+	if (!S.getPreparedStatement(checkUserExists)) {
+		stringstream query;
+		query << "SELECT user_id" << endl;
+		query << "FROM users" << endl;
+		query << "WHERE user_id = $1;";
+		S.requestNewPreparedStatement(checkUserExists, query.str());
+	}
+	//user_id
+	if (!S.getPreparedStatement(getUserCredits)) {
+		stringstream query;
+		query << "SELECT credits" << endl;
+		query << "FROM users" << endl;
+		query << "WHERE user_id = $1;";
+		S.requestNewPreparedStatement(getUserCredits, query.str());
+	}
+	//race_id
+	if (!S.getPreparedStatement(getRaceDate)) {
+		stringstream query;
+		query << "SELECT time_created" << endl;
+		query << "FROM races" << endl;
+		query << "WHERE race_id = $1;";
+		S.requestNewPreparedStatement(getRaceDate, query.str());
+	}
+	//race_id
+	if (!S.getPreparedStatement(getNumHorsesOnRace)) {
+		stringstream query;
+		query << "SELECT num_horses_race($1);" << endl;
+		S.requestNewPreparedStatement(getNumHorsesOnRace, query.str());
+	}
+	//race_id
+	if (!S.getPreparedStatement(getHorsesOnRace)) {
+		stringstream query;
+		query << "SELECT horse_id" << endl;
+		query << "FROM are_on" << endl;
+		query << "WHERE race_id = $1" << endl;
+		query << "ORDER BY horse_id;" << endl;
+		S.requestNewPreparedStatement(getHorsesOnRace, query.str());
+	}
+	//user_id, horse_id, race_id
+	if (!S.getPreparedStatement(checkBetExists)) {
+		stringstream query;
+		query << "SELECT bet" << endl;
+		query << "FROM bets" << endl;
+		query << "WHERE user_id = $1 AND horse_id = $2 AND race_id = $3;";
+		S.requestNewPreparedStatement(checkBetExists, query.str());
+	}
+	//credits delta, user_id
+	if (!S.getPreparedStatement(addCredits)) {
+		stringstream query;
+		query << "BEGIN;" << endl;
+		query << "UPDATE users" << endl;
+		query << "SET credits = credits + $1" << endl;
+		query << "WHERE user_id = $2;" << endl;
+		query << "COMMIT;";
+		S.requestNewPreparedStatement(addCredits, query.str());
+	}
+	//race_id
+	if (!S.getPreparedStatement(checkRaceStarted)) {
+		stringstream query;
+		query << "SELECT started FROM races WHERE race_id = $1";
+		S.requestNewPreparedStatement(checkRaceStarted, query.str());
+	}
+	//user_id, race_id, horse_id, previous_bet_value
+	if (!S.getPreparedStatement(removeBet)) {
+		stringstream query;
+
+		query << "BEGIN;" << endl;
+
+		query << "DELETE FROM bets" << endl;
+		query << "WHERE user_id = $1 AND race_id = $2 AND horse_id = $3;" << endl;
+
+		query << "UPDATE users" << endl;
+		query << "SET credits=credits + $4" << endl;
+		query << "WHERE user_id=$1;";
+
+		query << "COMMIT;";
+	}
+}
+
 void print_command(parsed_command temp)
 {
  	cerr << endl << "command: \"" << temp.cmd << "\"" << endl << endl;
@@ -1148,7 +1350,7 @@ bool Client::check_horse_available(int h_i)
 	{
 		if(it.second->finished)
 			continue;	//if it is already finished, then the horse can be available even if it was in this race
-		for(auto &i:it.second->horses)
+		for (auto &i : it.second->horses)
 		{
 			if(i.first==h_i)
 				return false;
