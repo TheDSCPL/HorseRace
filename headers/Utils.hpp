@@ -2,6 +2,7 @@
 #define UTILS_H
 
 #include <string>
+#include <vector>
 
 std::string operator+(const std::string &s, int i);
 
@@ -37,7 +38,10 @@ namespace Utils {
 
     std::string demangle(std::string const&);
 
-    unsigned long getNumberOfArgs(std::string const &);
+    int getNumberOfArgs(std::string const &);
+
+    template<typename T>
+    std::vector<T *> copyDynamicVector(const std::vector<T *> &);
 }
 
 #endif

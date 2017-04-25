@@ -20,15 +20,21 @@ class Tuple {
 	friend class SQLResultTable;
 
     Tuple(const std::vector<std::string *> &);    //only SQLResultTable can use this constructor
-    ~Tuple();
 	const std::vector<std::string*> values;
 public:
 	Tuple(const Tuple&);
+
+    ~Tuple();
 	std::vector<std::string> getValues() const;
 	std::string getString(unsigned int) const;
 	int getInt(unsigned int) const;
 	double getDouble(unsigned int) const;
 	bool getBool(unsigned int) const;
+
+    std::string operator[](unsigned int i) const {
+        return std::string(*values[i]);
+    }
+
 };
 
 class SQLResultTable {
@@ -41,7 +47,6 @@ class SQLResultTable {
 
     static std::vector<Tuple*> getTuplesFromPGresult(const PGresult *);
     static std::vector<std::string> getColumnNamesFromPGresult(const PGresult *);
-    static std::vector<Tuple*> copyTuplesVector(std::vector<Tuple*>);
 	static std::string getPrintedTable(const PGresult *);
 public:
     SQLResultTable(SQLResultTable const&);
@@ -51,12 +56,18 @@ public:
 	unsigned long getNumberOfColumns() const;
 	std::string getColumnName(unsigned int n) const;
 	const std::vector<std::string>& getColumnNames() const;
+
+    std::vector<Tuple> getTuples() const;
 	bool isEmpty() const;
 
-    void print(std::ostream &out, bool showNumRows = true) const;
+    void print(std::ostream &out) const;
 
     operator const char *() const {
         return printedTable.c_str();
+    }
+
+    const Tuple *const operator[](unsigned int i) const {
+        return tuples.at(i);
     }
 };
 
@@ -147,7 +158,6 @@ class SQL_Error
 {
 public:
 	SQL_Error(PGresult*);
-	SQL_Error(const SQL_Error *);
 	SQL_Error(const SQL_Error&);
 	SQL_Error(const std::string&);
 	~SQL_Error();

@@ -1,4 +1,5 @@
 #include "../headers/Utils.hpp"
+#include "../headers/DBMS.hpp"
 #include <algorithm>
 #include <cxxabi.h>
 #include <cctype>
@@ -158,7 +159,7 @@ string Utils::demangle(string const& to_demangle)	//to know what was the unknow 
     return demangled;
 }
 
-unsigned long Utils::getNumberOfArgs(std::string const &query) {
+int Utils::getNumberOfArgs(std::string const &query) {
     if (query.empty())
         return 0;
     query.length();
@@ -177,5 +178,17 @@ unsigned long Utils::getNumberOfArgs(std::string const &query) {
             }
         }
     }
-    return args.size();
+    return (int) args.size();
 }
+
+template<typename T>
+std::vector<T *> Utils::copyDynamicVector(const std::vector<T *> &v) {
+    vector<T *> ret;
+    for (int i = 0; i < v.size(); i++)
+        ret.push_back(new T(*v[i]));
+    return ret;
+}
+
+template std::vector<string *> Utils::copyDynamicVector(const std::vector<string *> &);
+
+template std::vector<Tuple *> Utils::copyDynamicVector(const std::vector<Tuple *> &);

@@ -46,75 +46,59 @@ void Client::initPreparedStatements() {
 	//login_name
 	if (!S.getPreparedStatement(getUserId)) {
 		stringstream query;
-		query << "BEGIN;";
 		query << "SELECT user_id, name" << endl;
 		query << "FROM users" << endl;
 		query << "WHERE username = $1;";
-		query << "COMMIT;";
 		S.requestNewPreparedStatement(getUserId, query.str());
 	}
 	//user_id, hashed_pass
 	if (!S.getPreparedStatement(checkUserAndPass)) {
 		stringstream query;
-		query << "BEGIN;";
 		query << "SELECT user_id, name" << endl;
 		query << "FROM users" << endl;
 		query << "WHERE user_id = $1 AND pass = $2;" << endl;
-		query << "COMMIT;";
 		S.requestNewPreparedStatement(checkUserAndPass, query.str());
 	}
 	//new_pass, user_id, old_pass
 	if (!S.getPreparedStatement(changePassword)) {
 		stringstream query;
-		query << "BEGIN;";
 		query << "UPDATE users" << endl;
 		query << "SET pass = $1" << endl;
 		query << "WHERE user_id = $2 AND pass = $3;";
-		query << "COMMIT;";
 		S.requestNewPreparedStatement(changePassword, query.str());
 	}
 	//admin(boolean as string), user_id
 	if (!S.getPreparedStatement(changeAdmin)) {
 		stringstream query;
-		query << "BEGIN;";
 		query << "UPDATE users" << endl;
 		query << "SET admin = $1" << endl;
 		query << "WHERE user_id = $2;";
-		query << "COMMIT;";
 		S.requestNewPreparedStatement(changeAdmin, query.str());
 	}
 	//horse_name
 	if (!S.getPreparedStatement(getHorseId)) {
 		stringstream query;
-		query << "BEGIN;";
 		query << "SELECT horse_id" << endl;
 		query << "FROM horses" << endl;
 		query << "WHERE name = $1;";
-		query << "COMMIT;";
 		S.requestNewPreparedStatement(getHorseId, query.str());
 	}
 	//horse_name, speed
 	if (!S.getPreparedStatement(insertHorse)) {
 		stringstream query;
-		query << "BEGIN;" << endl;
 		query << "INSERT INTO horses VALUES (DEFAULT,$1,$2);" << endl;
-		query << "COMMIT;" << endl;
 		S.requestNewPreparedStatement(insertHorse, query.str());
 	}
 	//horse_id, race_id, state
 	if (!S.getPreparedStatement(insertHorseInRace)) {
 		stringstream query;
-		query << "BEGIN;" << endl;
 		query << "INSERT INTO are_on VALUES ($1,$2,$3,NULL);" << endl;
-		query << "COMMIT;" << endl;
 		S.requestNewPreparedStatement(insertHorseInRace, query.str());
 	}
 	//laps
 	if (!S.getPreparedStatement(insertRace)) {
 		stringstream query;
-		query << "BEGIN;" << endl;
 		query << "INSERT INTO races VALUES ($1,DEFAULT,DEFAULT,DEFAULT);" << endl;
-		query << "COMMIT;" << endl;
 		S.requestNewPreparedStatement(insertRace, query.str());
 	}
 	//
@@ -192,34 +176,32 @@ void Client::initPreparedStatements() {
 	//credits delta, user_id
 	if (!S.getPreparedStatement(addCredits)) {
 		stringstream query;
-		query << "BEGIN;" << endl;
 		query << "UPDATE users" << endl;
 		query << "SET credits = credits + $1" << endl;
 		query << "WHERE user_id = $2;" << endl;
-		query << "COMMIT;";
 		S.requestNewPreparedStatement(addCredits, query.str());
 	}
 	//race_id
 	if (!S.getPreparedStatement(checkRaceStarted)) {
 		stringstream query;
-		query << "SELECT started FROM races WHERE race_id = $1";
+        query << "SELECT started FROM races WHERE race_id = $1;";
 		S.requestNewPreparedStatement(checkRaceStarted, query.str());
 	}
-	//user_id, race_id, horse_id, previous_bet_value
-	if (!S.getPreparedStatement(removeBet)) {
-		stringstream query;
+    /*//user_id, race_id, horse_id, previous_bet_value
+    if (!S.getPreparedStatement(removeBet)) {
+        stringstream query;
 
-		query << "BEGIN;" << endl;
+        query << "BEGIN;" << endl;
 
-		query << "DELETE FROM bets" << endl;
-		query << "WHERE user_id = $1 AND race_id = $2 AND horse_id = $3;" << endl;
+        query << "DELETE FROM bets" << endl;
+        query << "WHERE user_id = $1 AND race_id = $2 AND horse_id = $3;" << endl;
 
-		query << "UPDATE users" << endl;
-		query << "SET credits=credits + $4" << endl;
-		query << "WHERE user_id=$1;";
+        query << "UPDATE users" << endl;
+        query << "SET credits = credits + $4" << endl;
+        query << "WHERE user_id = $1;";
 
-		query << "COMMIT;";
-	}
+        query << "COMMIT;";
+    }*/
 }
 
 void print_command(parsed_command temp)

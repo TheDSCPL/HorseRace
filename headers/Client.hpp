@@ -47,8 +47,8 @@ class Client {
     const static std::string removeBet;
     const static std::string changeBet;
 
-    void static initPreparedStatements();
 public:
+    void static initPreparedStatements();
     int client_socket;
 
   	int user_id;

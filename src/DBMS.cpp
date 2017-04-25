@@ -15,9 +15,7 @@ using namespace std;
 
 //------------------------------------------ Tuple ------------------------------------------//
 
-Tuple::Tuple(const vector<string*> &v) : values(v) {
-    //values.insert(values.begin(),v.begin(),v.end());
-}
+Tuple::Tuple(const vector<string *> &v) : values(Utils::copyDynamicVector(v)) {}
 
 Tuple::~Tuple() {
     for(string* s : values)
@@ -25,11 +23,11 @@ Tuple::~Tuple() {
             delete s;
 }
 
-Tuple::Tuple(const Tuple & o) : /*table(o.table), */values(o.values) {}
+Tuple::Tuple(const Tuple &o) : values(Utils::copyDynamicVector(o.values)) {}
 
 vector<string> Tuple::getValues() const {
     //create a copy of "values" and return it
-    vector<string> ret(values.size());
+    vector<string> ret;
     for(string* s : values)
         ret.push_back(string(*s));
     return ret;
@@ -76,9 +74,9 @@ SQLResultTable::SQLResultTable(const PGresult *pGresult) : tuples(getTuplesFromP
 vector<Tuple*> SQLResultTable::getTuplesFromPGresult(const PGresult *pgr) {
     unsigned long n = (unsigned long)Utils::max(PQntuples(pgr),0);
     unsigned long columns = (unsigned long)Utils::max(PQnfields(pgr),0);
-    vector<Tuple*> ret(n);
+    vector<Tuple *> ret;
     for(int i = 0; i<n ; i++) {
-        vector<string*> t(columns);
+        vector<string *> t;
         for(int j = 0 ; j<columns ; j++)
         {
             if(PQgetisnull(pgr,i,j))
@@ -93,7 +91,7 @@ vector<Tuple*> SQLResultTable::getTuplesFromPGresult(const PGresult *pgr) {
 
 vector<std::string> SQLResultTable::getColumnNamesFromPGresult(const PGresult *pgr) {
     unsigned long columns = (unsigned long)Utils::max(PQnfields(pgr),0);
-    vector<string> ret(columns);
+    vector<string> ret;
     for(int i = 0; i<columns ; i++)
         ret.push_back(PQfname(pgr,i));
     return ret;
@@ -104,13 +102,6 @@ SQLResultTable::~SQLResultTable() {
         if(t)
             delete t;
     }
-}
-
-vector<Tuple*> SQLResultTable::copyTuplesVector(vector<Tuple *> origin) {
-    vector<Tuple*> ret(origin.size());
-    for(Tuple* t : origin)
-        ret.push_back(new Tuple(*t));
-    return ret;
 }
 
 string SQLResultTable::getPrintedTable(const PGresult *pgr) {
@@ -132,8 +123,8 @@ string SQLResultTable::getPrintedTable(const PGresult *pgr) {
     return ret;
 }
 
-SQLResultTable::SQLResultTable(SQLResultTable const & origin) : tuples(copyTuplesVector(origin.tuples)),
-                                                                columnNames(origin.columnNames) {}
+SQLResultTable::SQLResultTable(SQLResultTable const &origin) : tuples(Utils::copyDynamicVector(origin.tuples)),
+                                                               columnNames(origin.columnNames) {}
 
 unsigned long SQLResultTable::getNumberOfTuples() const {
     return tuples.size();
@@ -155,19 +146,20 @@ const vector<string>& SQLResultTable::getColumnNames() const {
     return columnNames;
 }
 
+std::vector<Tuple> SQLResultTable::getTuples() const {
+    vector<Tuple> ret;
+    for (int i = 0; i < getNumberOfTuples(); i++) {
+        ret.push_back(Tuple(*tuples[i]));
+    }
+    return ret;
+}
+
 bool SQLResultTable::isEmpty() const {
     return !getNumberOfTuples();
 }
 
-void SQLResultTable::print(ostream &outStream, bool showNumRows) const {
-    showNumRows |= true;
-    if (showNumRows)
-        outStream << printedTable;
-    else {
-        //regex matches("^\\s*[(]\\d+ rows[)]\\s*$");
-        //matches.assign("/^\\w*[(]0 rows[)]\\s*/gm");
-        //outStream << regex_replace(printedTable,matches,"");
-    }
+void SQLResultTable::print(ostream &outStream) const {
+    outStream << printedTable;
 }
 
 //------------------------------------------ SQLResult ------------------------------------------//
@@ -218,9 +210,11 @@ PreparedStatement::PreparedStatement(string const &name, string const &declarati
                                                                                                       declaration) *
                                                                                               sizeof(char *))) {
     if (!S.getPreparedStatement(name)) {
-        ExecStatusType r = PQresultStatus(PQprepare(S.conn, name.c_str(), declaration.c_str(), Utils::getNumberOfArgs(declaration), NULL));
+        PGresult *res = PQprepare(S.conn, name.c_str(), declaration.c_str(), Utils::getNumberOfArgs(declaration), NULL);
+        ExecStatusType r = PQresultStatus(res);
         if(r != PGRES_COMMAND_OK && r != PGRES_TUPLES_OK) {
-            throw SQL_Error(PQerrorMessage(SQLServer::server().conn));
+            throw SQL_Error(PQresultErrorMessage(res));
+            //throw SQL_Error(PQerrorMessage(SQLServer::server().conn));
         }
         S.preparedStatements.insert(make_pair(name,this));
         //S.preparedStatements.insert(pair<string, PreparedStatement *>(name, this));
@@ -252,9 +246,6 @@ SQLServer::SQLServer() //construtor
 
 SQLServer::~SQLServer() //destrutor
 {
-    for (pair<const string, PreparedStatement const *> i : preparedStatements)
-        if (i.second)
-            delete i.second;
     stop();
 }
 
@@ -350,11 +341,9 @@ const PreparedStatement *SQLServer::getPreparedStatement(std::string const &name
 
 SQL_Error::SQL_Error(PGresult *e) : err(e) {}
 
-SQL_Error::SQL_Error(const SQL_Error *e) : err(e->err) {}
-
 SQL_Error::SQL_Error(const SQL_Error &e) : err(e.err) {}
 
-SQL_Error::SQL_Error(const std::string &) {}
+SQL_Error::SQL_Error(const std::string &s) { cerr << s << endl; }
 
 SQL_Error::~SQL_Error() {
     //PQclear(err);

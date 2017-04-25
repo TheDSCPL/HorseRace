@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
 
     SQLServer::server().start();
 
-    string query = "SELECT * FROM test1 WHERE p_key = $1;";
+    /*string query = "SELECT * FROM test1 WHERE p_key = $1;";
 
     SQLServer::server().requestNewPreparedStatement("printMe",query);
 
@@ -49,7 +49,26 @@ int main(int argc, char *argv[])
 
     SQLResult res = preparedStatement->run({"1"});
 
-    cout << res;
+    cout << res;*/
+
+    try {
+        Client::initPreparedStatements();
+        const PreparedStatement *ps = S.getPreparedStatement("GET_USER_ID");
+        if (!ps)
+            return 1;
+        SQLResult sqlResult = ps->run({"lpcsd"});
+        const SQLResultTable &sqlResultTable = sqlResult.getResultTable();
+        for (int i = 0; i < sqlResultTable.getNumberOfTuples(); i++) {
+            //const Tuple * const tuple = sqlResultTable.getTuple(i);
+            //cout << "HERE! " << tuple->getInt(1) << endl;
+        }
+        cout << sqlResult << endl;
+        cout << sqlResultTable[0]->getInt(0) << endl;
+        cout << sqlResultTable[0]->getString(1) << endl;
+    } catch (...) {
+        cerr << "exception" << endl;
+    }
+
 
     //res.getResultTable().print(cout,false);
 
