@@ -226,6 +226,52 @@ CREATE TABLE users (
 );
 
 
+CREATE OR REPLACE FUNCTION changeBet (usid integer, hoid integer, raid integer, newbet numeric) 
+RETURNS varchar AS $ret$
+DECLARE
+	previousBet	numeric;
+	ret		varchar;
+BEGIN
+	previousBet := (SELECT bet FROM  bets WHERE user_id = usid AND horse_id = hoid AND race_id = raid LIMIT 1);
+
+	IF newbet < 0 THEN
+		RETURN 'Bets must be positive';
+	END IF;
+
+	IF (previousBet IS NULL) AND (newbet = 0) THEN
+		--RETURN 'The inserted user didn''t have a bet on the inserted horse and race';
+		RETURN 'OK';
+	END IF;
+
+	IF (SELECT balance FROM  bets WHERE user_id = usid AND horse_id = hoid AND race_id = raid LIMIT 1) IS NOT NULL THEN
+		RETURN 'Race already finished and thus it''s not possible to change this bet';
+	END IF;
+
+	--The bet change/removal/creation is valid!
+
+	IF newbet = 0 THEN --the bet exists and is to be deleted
+		DELETE FROM bets
+		WHERE user_id = usid AND race_id = raid AND horse_id = hoid;
+	ELSE --the bet is to be created or changed
+		IF previousBet IS NULL THEN --the bet didn't exist so it'll be created
+			INSERT INTO bets VALUES (DEFAULT,usid,hoid,raid,newbet,NULL);
+		ELSE --the bet exists so it'll be updated
+			UPDATE bets
+			SET bet = newbet
+			WHERE user_id = usid AND horse_id = hoid AND race_id = raid;
+		END IF;
+	END IF;
+
+	UPDATE users
+	SET credits=credits-newbet+COALESCE(previousBet,0)
+	WHERE user_id = usid;
+
+	RETURN 'OK';
+END;
+$ret$ LANGUAGE plpgsql;
+
+
+
 ALTER TABLE users OWNER TO bop2;
 
 --

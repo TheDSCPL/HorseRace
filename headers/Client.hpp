@@ -24,6 +24,36 @@ public:
     static vector<arg>& getCommands();
 }*/
 
+class PreparesStatementsInDBMS {
+protected:
+    PreparesStatementsInDBMS();
+    //virtual void initPreparedStatements() = 0;
+};
+
+class PrivilegeGroup {
+protected:
+    //virtual std::string help() = 0;
+};
+
+class LoggedOut : protected PrivilegeGroup {
+protected:
+    std::string help();
+
+    void regist(std::string login_name, std::string pass, std::string name, bool ad = false,
+                int cr = Constants::DEFAULT_CREDITS);
+
+    void login(std::string login_name, std::string pass);
+};
+
+class SelfManagement : protected PrivilegeGroup, protected PreparesStatementsInDBMS {
+protected:
+    void initPreparedStatements();
+
+    std::string help();
+
+    void logout();
+};
+
 class Client {
     const static std::string getUserId;
     const static std::string checkUserAndPass;
@@ -44,8 +74,17 @@ class Client {
     const static std::string checkBetExists;
     const static std::string addCredits;
     const static std::string checkRaceStarted;
-    const static std::string removeBet;
     const static std::string changeBet;
+    const static std::string getAllRaces;
+    const static std::string hasRaceStarted;
+    const static std::string getRaceLaps;
+    const static std::string getHorseRanks;
+    const static std::string getBetsPerUser;
+    const static std::string getAllUsers;
+    const static std::string getLoggedInUsers_createTempTable;
+    const static std::string getLoggedInUsers_insertIntoTempTable;
+    const static std::string getLoggedInUsers_getLoggedInUsers;
+    const static std::string getLoggedInUsers_destroyTempTable;
 
 public:
     void static initPreparedStatements();
@@ -141,9 +180,12 @@ class arg  //funciona
     arg(boost::any);
     arg(const arg&);
 
-    bool operator=(const boost::any& st) {
+    template<typename T>
+    arg(const T &);
+
+    /*bool operator=(const boost::any& st) {
       return this->set(st);
-    }
+    }*/
 
     bool set(const boost::any& st);
     //public functions

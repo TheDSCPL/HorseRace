@@ -10,3 +10,4 @@
 -improve the commands
 -implement the prepared statements
 -correct the bug of the initialization of the commands
+-improve the SQL exceptions

@@ -51,23 +51,24 @@ int main(int argc, char *argv[])
 
     cout << res;*/
 
-    try {
+
+
+    /*try {
         Client::initPreparedStatements();
-        const PreparedStatement *ps = S.getPreparedStatement("GET_USER_ID");
+        const PreparedStatement *ps = S.getPreparedStatement("CHANGE_BET");
         if (!ps)
+        {
+            cout << "No such ps" << endl;
             return 1;
-        SQLResult sqlResult = ps->run({"lpcsd"});
-        const SQLResultTable &sqlResultTable = sqlResult.getResultTable();
-        for (int i = 0; i < sqlResultTable.getNumberOfTuples(); i++) {
-            //const Tuple * const tuple = sqlResultTable.getTuple(i);
-            //cout << "HERE! " << tuple->getInt(1) << endl;
         }
-        cout << sqlResult << endl;
-        cout << sqlResultTable[0]->getInt(0) << endl;
-        cout << sqlResultTable[0]->getString(1) << endl;
-    } catch (...) {
+        SQLResult sqlResult = ps->run({"1", "2", "3", "00"});
+        const SQLResultTable &sqlResultTable = sqlResult.getResultTable();
+        cout << sqlResult.hasTableResult() << endl;
+        //cout << sqlResultTable[0]->getInt(0) << endl;
+        cout << sqlResultTable[0]->getString(0) << endl;
+    } catch (int) {
         cerr << "exception" << endl;
-    }
+    }*/
 
 
     //res.getResultTable().print(cout,false);
@@ -76,7 +77,7 @@ int main(int argc, char *argv[])
 
     res.getResultTable().print(cout);*/
 
-    /*srand(time(NULL));
+    srand(time(NULL));
 
 	system("clear");
 

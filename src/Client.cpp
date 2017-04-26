@@ -20,6 +20,10 @@ using namespace Constants;
 #define vcout if(false) cout
 #endif
 
+PreparesStatementsInDBMS::PreparesStatementsInDBMS() {
+    //initPreparedStatements();
+}
+
 const std::string Client::getUserId = "GET_USER_ID";
 const std::string Client::checkUserAndPass = "CHECK_USER_AND_PASS";
 const std::string Client::changePassword = "CHANGE_PASSWORD";
@@ -39,8 +43,17 @@ const std::string Client::getHorsesOnRace = "GET_HORSES_ON_RACE";
 const std::string Client::checkBetExists = "CHECK_BET_EXISTS";
 const std::string Client::addCredits = "ADD_CREDITS";
 const std::string Client::checkRaceStarted = "CHECK_RACE_STARTED";
-const std::string Client::removeBet = "REMOVE_BET";
 const std::string Client::changeBet = "CHANGE_BET";
+const std::string Client::getAllRaces = "GET_ALL_RACES";
+const std::string Client::hasRaceStarted = "HAS_RACE_STARTED";
+const std::string Client::getRaceLaps = "GET_RACE_LAPS";
+const std::string Client::getHorseRanks = "GET_HORSE_RANKS";
+const std::string Client::getBetsPerUser = "GET_BETS_PER_USER";
+const std::string Client::getAllUsers = "GET_ALL_USERS";
+const std::string Client::getLoggedInUsers_createTempTable = "GET_LOGGED_IN_USERS__CREATE_TEMP_TABLE";
+const std::string Client::getLoggedInUsers_insertIntoTempTable = "GET_LOGGED_IN_USERS__INSERT_INTO_TEMP_TABLE";
+const std::string Client::getLoggedInUsers_getLoggedInUsers = "GET_LOGGED_IN_USERS__GET_LOGGED_IN_USERS";
+const std::string Client::getLoggedInUsers_destroyTempTable = "GET_LOGGED_IN_USERS__DESTROY_TEMP_TABLE";
 
 void Client::initPreparedStatements() {
 	//login_name
@@ -159,10 +172,10 @@ void Client::initPreparedStatements() {
 	//race_id
 	if (!S.getPreparedStatement(getHorsesOnRace)) {
 		stringstream query;
-		query << "SELECT horse_id" << endl;
-		query << "FROM are_on" << endl;
-		query << "WHERE race_id = $1" << endl;
-		query << "ORDER BY horse_id;" << endl;
+        query << "SELECT horse_id,name,speed" << endl;
+        query << "FROM are_on JOIN horses USING (horse_id)" << endl;
+        query << "WHERE race_id = $1" << endl;
+        query << "ORDER BY horse_id;" << endl;
 		S.requestNewPreparedStatement(getHorsesOnRace, query.str());
 	}
 	//user_id, horse_id, race_id
@@ -187,21 +200,89 @@ void Client::initPreparedStatements() {
         query << "SELECT started FROM races WHERE race_id = $1;";
 		S.requestNewPreparedStatement(checkRaceStarted, query.str());
 	}
-    /*//user_id, race_id, horse_id, previous_bet_value
-    if (!S.getPreparedStatement(removeBet)) {
+    //user_id, horse_id, race_id, previous_bet_value
+    if (!S.getPreparedStatement(changeBet)) {
         stringstream query;
-
-        query << "BEGIN;" << endl;
-
-        query << "DELETE FROM bets" << endl;
-        query << "WHERE user_id = $1 AND race_id = $2 AND horse_id = $3;" << endl;
-
-        query << "UPDATE users" << endl;
-        query << "SET credits = credits + $4" << endl;
-        query << "WHERE user_id = $1;";
-
-        query << "COMMIT;";
-    }*/
+        query << "SELECT changeBet($1,$2,$3,$4);" << endl;
+        S.requestNewPreparedStatement(changeBet, query.str());
+    }
+    //
+    if (!S.getPreparedStatement(getAllRaces)) {
+        stringstream query;
+        query << "SELECT *" << endl;
+        query << "FROM races;" << endl;
+        S.requestNewPreparedStatement(changeBet, query.str());
+    }
+    //race_id
+    if (!S.getPreparedStatement(hasRaceStarted)) {
+        stringstream query;
+        query << "SELECT started" << endl;
+        query << "FROM races" << endl;
+        query << "WHERE race_id = $1;";
+        S.requestNewPreparedStatement(hasRaceStarted, query.str());
+    }
+    //race_id
+    if (!S.getPreparedStatement(getRaceLaps)) {
+        stringstream query;
+        query << "SELECT laps" << endl;
+        query << "FROM races" << endl;
+        query << "WHERE race_id = $1;";
+        S.requestNewPreparedStatement(getRaceLaps, query.str());
+    }
+    //maxNumberOfHorses
+    if (!S.getPreparedStatement(getHorseRanks)) {
+        stringstream query;
+        query << "SELECT *" << endl;
+        query << "FROM horse_ranks" << endl;
+        query << "LIMIT CASE WHEN $1 < 0 THEN 5 ELSE $1 END;";
+        S.requestNewPreparedStatement(getHorseRanks, query.str());
+    }
+    //user_id, maxNumberOfHorses
+    if (!S.getPreparedStatement(getBetsPerUser)) {
+        stringstream query;
+        query << "SELECT *" << endl;
+        query << "FROM bets" << endl;
+        query << "WHERE user_id = $1" << endl;
+        query << "ORDER BY race_id DESC , horse_id" << endl;
+        query << "LIMIT CASE WHEN $1 < 0 THEN 5 ELSE $1 END;";
+        S.requestNewPreparedStatement(getBetsPerUser, query.str());
+    }
+    //
+    if (!S.getPreparedStatement(getAllUsers)) {
+        stringstream query;
+        query << "SELECT user_id,name,username,admin,credits" << endl;
+        query << "FROM users" << endl;
+        query << "ORDER BY user_id;" << endl;
+        S.requestNewPreparedStatement(getAllUsers, query.str());
+    }
+    //
+    if (!S.getPreparedStatement(getLoggedInUsers_createTempTable)) {
+        stringstream query;
+        query << "CREATE TEMP TABLE foo (" << endl;
+        query << "user_id integer NOT NULL," << endl;
+        query << "client_socket varchar NOT NULL);" << endl;
+        S.requestNewPreparedStatement(getLoggedInUsers_createTempTable, query.str());
+    }
+    //user_id, socket OR "'SERVER'" if logged in the server
+    if (!S.getPreparedStatement(getLoggedInUsers_insertIntoTempTable)) {
+        stringstream query;
+        query << "INSERT INTO foo VALUES($1,$2);";
+        S.requestNewPreparedStatement(getLoggedInUsers_insertIntoTempTable, query.str());
+    }
+    //
+    if (!S.getPreparedStatement(getLoggedInUsers_getLoggedInUsers)) {
+        stringstream query;
+        query << "SELECT user_id,client_socket,name,username,admin,credits" << endl;
+        query << "FROM users JOIN foo USING (user_id)" << endl;
+        query << "ORDER BY user_id;" << endl;
+        S.requestNewPreparedStatement(getLoggedInUsers_getLoggedInUsers, query.str());
+    }
+    //
+    if (!S.getPreparedStatement(getLoggedInUsers_destroyTempTable)) {
+        stringstream query;
+        query << "DISCARD TEMP;" << endl;
+        S.requestNewPreparedStatement(getLoggedInUsers_destroyTempTable, query.str());
+    }
 }
 
 void print_command(parsed_command temp)
@@ -255,16 +336,16 @@ parsed_command Client::get_parsed_command(string input)
 	const type_info& _v_int = typeid(vector<int>);
 	const map<string,vector<arg>> commands =
 	{
-		{ "\\help" , {} },																								//ALTER
-		{ "\\clear" , {} },																							//DONE
-		{ "\\quit" , {} }/*,																							//DONE
-		{ "\\login" , {(string)"" , (string)""} },	//username,pass													//DONE
-		{ "\\logout" , {} },																						//DONE
-		{ "\\register" , {(string)"" , (string)"" , (string)""} }, //username,pass,name (name may contain spaces)	//DONE
-		{ "\\change_admin" , {(string)"" , false} },																//DONE
-		{ "\\change_admin_id" , {-1 , false} },																		//DONE
-		{ "\\passwd" , {(string)"" , (string)"" , (string)""} }, //old pass, new pass, new pass						//DONE
-		{ "\\passwd_other" , {(string)"" , (string)"" , (string)""} }, //username, new pass, new pass				//DONE
+            {"\\help" ,            {} },																								//ALTER
+		{    "\\clear" ,           {} },																							//DONE
+            {"\\quit",             {}},                                                                                            //DONE
+		{    "\\login" ,           {(string)"" , (string)""} },	//username,pass													//DONE
+		{    "\\logout" ,          {} },																						//DONE
+		{    "\\register" ,        {(string)"" , (string)"" , (string)""} }, //username,pass,name (name may contain spaces)	//DONE
+		{    "\\change_admin" ,    {(string)"" , false} },																//DONE
+		{    "\\change_admin_id" , {-1 , false} },																		//DONE
+		{    "\\passwd" ,          {(string)"" , (string)"" , (string)""} }, //old pass, new pass, new pass						//DONE
+		{    "\\passwd_other" ,    {(string)"" , (string)"" , (string)""} }, //username, new pass, new pass				//DONE
 		{ "\\passwd_other_id" , {-1 , (string)"" , (string)""} }, //user_id, new pass, new pass						//DONE
 		{ "\\add_horse" , {0.0 , (string)""} },																		//DONE
 		{ "\\start_race" , {-1} },																					//DONE
@@ -282,10 +363,10 @@ parsed_command Client::get_parsed_command(string input)
 		{ "\\show_some_horses" , {-1} },																			//DONE
 		{ "\\show_horses_on_race" , {-1} }, //shows horses at a given race											//DONE
 		{ "\\show_races" , {(string)""} },																			//DONE
-		{ "\\show_race_info" , {-1} },																				//DONE
-		{ "\\show_bets" , {-1} },																					//DONE
-		{ "\\show_bets_other", {-1,-1} },																			//DONE -- ADD TO HELP
-		{ "\\sql_query" , {(string)""} } //run a SQL query															//DONE*/
+		{    "\\show_race_info" ,  {-1} },																				//DONE
+		{    "\\show_bets" ,       {-1} },																					//DONE
+		{    "\\show_bets_other",  {-1,-1} },																			//DONE -- ADD TO HELP
+		{    "\\sql_query" ,       {(string)""} } //run a SQL query															//DONE*/
 	};
 	stringstream temp(input);
 	size_t size=temp.str().size();
@@ -297,11 +378,11 @@ parsed_command Client::get_parsed_command(string input)
 		writeline(client_socket,"Command \""+buffer+"\" is invalid.");
 		return parsed_command{"",{}};
 	}
-	parsed_command command{"",(vector<arg>)it->second};
+    parsed_command command{"", it->second};
 
 	command.cmd=buffer;
 	size_t place=buffer.size()+1;
-	int n=it->second.size();
+    unsigned long n = it->second.size();
 	for(int i=0;i<n;i++)
 	{
 		if(place>=size)	//was still waiting for arguments but there are none left
@@ -565,9 +646,7 @@ bool check_valid(string pa)
 		if(*it==pa[i])
 			return false;
 	}
-	if(strstr(pa.c_str(),"--"))
-		return false;
-	return true;
+    return !strstr(pa.c_str(), "--");
 }
 
 Client::Client(int so) : client_socket(so), user_id(LOGGED_OFF)
@@ -1535,10 +1614,10 @@ void Client::bet(int u_i,int h_i,int r_i,double cr)
 	}
 	stringstream query;
 	PGresult* res;
-	int previous_bet=check_bet(u_i,h_i,r_i);
+    double previous_bet = check_bet(u_i, h_i, r_i);
 	if(previous_bet>0)	//bet already existed
 	{
-		if(cr==0)
+        if (cr == 0)   //remove bet
 		{
 			query << "BEGIN;" << endl;
 
@@ -1571,6 +1650,7 @@ void Client::bet(int u_i,int h_i,int r_i,double cr)
 			writeline(client_socket,"You can't bet credits that you don't have. Get to an admin if you want more credits.");
 			return;
 		}
+        //change credits
 		query << "BEGIN;";
 
 		query << "UPDATE bets" << endl;
@@ -1579,7 +1659,7 @@ void Client::bet(int u_i,int h_i,int r_i,double cr)
 
 		query << "UPDATE bets" << endl;
 		query << "SET balance = " << -cr << endl;
-		query << "WHERE user_id=" << u_i << " AND horse_id=" << h_i << " AND race_id=" << r_i << ";";		
+        query << "WHERE user_id=" << u_i << " AND horse_id=" << h_i << " AND race_id=" << r_i << ";";
 
 		query << "UPDATE users" << endl;
 		query << "SET credits=credits-(" << cr-previous_bet << ")" << endl;
@@ -1738,7 +1818,7 @@ void Client::show_race_info(int r_i)
 	writeline(client_socket,"Time created="+get_race_date(r_i));
 	writeline(client_socket,"Started="+Utils::b2s(get_race_started(r_i)));
 	auto temp=races.find(r_i);
-	bool temp_b = temp==races.end()?false:true;
+    bool temp_b = temp != races.end();
 	writeline(client_socket,"Active now="+Utils::b2s(temp_b));
 	if(temp_b)
 		writeline(client_socket,"Finished="+Utils::b2s(temp->second->finished));
@@ -1749,7 +1829,7 @@ void Client::show_race_info(int r_i)
 bool Client::get_race_started(int r_i)
 {
 	if(!check_race(r_i))
-		return "";
+        return false;
 	stringstream query;
 	PGresult* res;
 	query << "SELECT started" << endl;
@@ -1931,7 +2011,7 @@ void Client::show_users(string opt)
 	{
 		if(it.second>0)	//if logged_in
 		{
-			temp= it.first<=0 ? "SERVER" : to_string(it.first);
+            temp = it.first <= 0 ? "SERVER" : to_string(it.first);
 			query << "INSERT INTO foo VALUES(" << it.second << ",'" << temp << "');" ;
 			try
 			{
@@ -1948,7 +2028,7 @@ void Client::show_users(string opt)
 		}
 	}
 
-	query << "SELECT user_id,name,username,admin,credits,client_socket" << endl;
+    query << "SELECT user_id,client_socket,name,username,admin,credits" << endl;
 	query << "FROM users JOIN foo USING (user_id)" << endl;
 	query << "ORDER BY user_id;" << endl;
 	try
@@ -2044,6 +2124,9 @@ arg::arg() {}
 arg::arg(boost::any d) : data(d) {}
 arg::arg(const arg& d) : data(d.data) {}
 
+template<typename T>
+arg::arg(const T &d) : data(d) {}
+
 bool arg::set(const boost::any& st) {
 	if(!this->isEmpty() && !this->isOfType(st.type()))
 		return false;
@@ -2052,7 +2135,7 @@ bool arg::set(const boost::any& st) {
 }
 
 template <typename T> T arg::get() const {
-    return any_cast<T>(data);
+    return boost::any_cast<T>(data);
 	//return boost::any::any_cast<T>(data);
 }
 
