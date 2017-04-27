@@ -62,13 +62,12 @@ Race::Race(int r_i , int l) : race_id(r_i) , laps(l) , bets(get_race_bets(r_i)),
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		broadcast(RESET_ATTR + RED_BG);
 		clear();
 		broadcast(RESET_ATTR + BOLD + "FATAL ERROR OCCURRED. PLEASE CONTACT THE ADMIN." + RESET_ATTR,17,10);
 		broadcast(RESET_ATTR);
-		throw(e);
 	}
 	PQclear(res);
 	query.str("");query.clear();
@@ -82,13 +81,12 @@ Race::Race(int r_i , int l) : race_id(r_i) , laps(l) , bets(get_race_bets(r_i)),
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		broadcast(RESET_ATTR + RED_BG);
 		clear();
 		broadcast(RESET_ATTR + BOLD + "FATAL ERROR OCCURRED. PLEASE CONTACT THE ADMIN." + RESET_ATTR,17,10);
 		broadcast(RESET_ATTR);
-		throw(e);
 	}
 
 	int h_i;
@@ -223,12 +221,12 @@ bool check_user(int u_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::get_user_id\" using login_name=\"" << login_name << "\"");
-		clog("Error in internal function \"Client::check_user\" using user_id=" << u_i << ". Query error:n" << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"Client::check_user\" using user_id=" << u_i << ". Query error:n" << e.what());
 		//PQclear(res);
-		throw (int)3;
+		//throw (int)3;
 	}
 	if( PQntuples( res )==0 )
 	{
@@ -252,12 +250,12 @@ bool check_race(int r_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::get_user_id\" using login_name=\"" << login_name << "\"");
-		clog("Error in internal function \"Client::check_race\" using race_id=" << r_i << ". Query error:n" << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"Client::check_race\" using race_id=" << r_i << ". Query error:n" << e.what());
 		//PQclear(res);
-		throw (int)2;
+		//throw (int)2;
 	}
 	if( PQntuples( res )==0 )
 	{
@@ -281,12 +279,12 @@ bool check_horse(int h_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::get_user_id\" using login_name=\"" << login_name << "\"");
-		clog("Error in internal function \"check_race\" using race_id=" << h_i << ". Query error:n" << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"check_race\" using race_id=" << h_i << ". Query error:n" << e.what());
 		//PQclear(res);
-		throw (int)2;
+		//throw (int)2;
 	}
 	if( PQntuples( res )==0 )
 	{
@@ -313,13 +311,13 @@ double Race::get_horse_bets(int h_i,int r_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		broadcast(RESET_ATTR + RED_BG);
 		clear();
 		broadcast(RESET_ATTR + BOLD + "SQL ERROR OCCURRED. PLEASE CONTACT THE ADMIN." + RESET_ATTR,17,10);
 		broadcast(RESET_ATTR);
-		throw(e);
+		//throw(e);
 	}
 	if(PQntuples(res)==0)
 		return 0.0;
@@ -342,13 +340,13 @@ double Race::get_race_bets(int r_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		broadcast(RESET_ATTR + RED_BG);
 		clear();
 		broadcast(RESET_ATTR + BOLD + "SQL ERROR OCCURRED. PLEASE CONTACT THE ADMIN." + RESET_ATTR,17,10);
 		broadcast(RESET_ATTR);
-		throw(e);
+		//throw(e);
 	}
 	if(PQntuples(res)==0)
 		return 0.0;
@@ -376,10 +374,10 @@ double get_user_credits(int u_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::get_user_id\" using login_name=\"" << login_name << "\"");
-		clog("Error in internal function \"get_user_credits\" using user_id=" << u_i << ". Query error: " << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"get_user_credits\" using user_id=" << u_i << ". Query error: " << e.what());
 		//PQclear(res);
 		throw (int)5;
 	}
@@ -412,11 +410,11 @@ void Race::add_credits(int u_i, double cr)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
 		broadcast("Error while running your command. If the problem persists, please contact the admin.");
-		throw(e);
+		//throw(e);
 	}
 	PQclear(res);
 }
@@ -436,11 +434,11 @@ void Race::add_balance(int r_i,int u_i, int h_i, double cr)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
 		broadcast("Error while running your command. If the problem persists, please contact the admin.");
-		throw(e);
+		//throw(e);
 	}
 	PQclear(res);
 }
@@ -503,13 +501,13 @@ void Race::race_routine()
 		{
 			EXECUTE;
 		}
-		catch(SQL_Error e)
+		catch(DBMSError& e)
 		{
 			broadcast(RESET_ATTR + RED_BG);
 			clear();
 			broadcast(RESET_ATTR + BOLD + "SQL ERROR OCCURRED. PLEASE CONTACT THE ADMIN." + RESET_ATTR,17,10);
 			broadcast(RESET_ATTR);
-			throw(e);
+			//throw(e);
 		}
 		PQclear(res);
 	}
@@ -528,13 +526,13 @@ void Race::race_routine()
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		broadcast(RESET_ATTR + RED_BG);
 		clear();
 		broadcast(RESET_ATTR + BOLD + "SQL ERROR OCCURRED. PLEASE CONTACT THE ADMIN." + RESET_ATTR,17,10);
 		broadcast(RESET_ATTR);
-		throw(e);
+		//throw(e);
 	}
 
 	int n=PQntuples(res);

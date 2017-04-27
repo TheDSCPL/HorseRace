@@ -153,20 +153,25 @@ public:
 	const PreparedStatement* getPreparedStatement(std::string const& name) const;
 };
 
-//DEPRECATED
-class SQL_Error
+class DBMSError : public std::exception
 {
+private:
+	std::string whatMessage;
 public:
-	SQL_Error(PGresult*);
-	SQL_Error(const SQL_Error&);
-	SQL_Error(const std::string&);
-	~SQL_Error();
-	PGresult *err;
+	DBMSError(const DBMSError&);
+	DBMSError(const std::string&);
+	virtual ~DBMSError();
+	const char* what() const throw();
 };
 
-class TupleConversionError : std::logic_error {
+class DBMSErrorCreatingPreparedStatement : public DBMSError {
 public:
-	TupleConversionError(const std::string& err);
+	DBMSErrorCreatingPreparedStatement(const std::string&);
+};
+
+class DBMSErrorRunningPreparedStatement : public DBMSError {
+public:
+	DBMSErrorRunningPreparedStatement(const std::string&);
 };
 
 #endif

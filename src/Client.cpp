@@ -20,42 +20,251 @@ using namespace Constants;
 #define vcout if(false) cout
 #endif
 
-PreparesStatementsInDBMS::PreparesStatementsInDBMS() {
-    //initPreparedStatements();
+//---------------------------PrivilegeGroup---------------------------//
+
+PrivilegeGroup::PrivilegeGroup(int client_socket, int user_id, std::string username, std::string name) :
+		client_socket(client_socket),
+		user_id(user_id),
+		username(username),
+		name(name) {}
+
+void PrivilegeGroup::writeline(int socketfd, string line,bool paragraph) const
+{
+	Network::server().writeline(socketfd,line,paragraph);
 }
 
-const std::string Client::getUserId = "GET_USER_ID";
-const std::string Client::checkUserAndPass = "CHECK_USER_AND_PASS";
-const std::string Client::changePassword = "CHANGE_PASSWORD";
-const std::string Client::changeAdmin = "CHANGE_ADMIN";
-const std::string Client::getHorseId = "GET_HORSE_ID";
-const std::string Client::insertHorse = "INSERT_HORSE";
-const std::string Client::insertHorseInRace = "INSERT_HORSE_IN_RACE";
-const std::string Client::insertRace = "INSERT_RACE";
-const std::string Client::getLatestRaceId = "GET_LATEST_RACE_ID";
-const std::string Client::checkRaceExists = "CHECK_RACE_EXISTS";
-const std::string Client::checkUserExists = "CHECK_USER_EXISTS";
-const std::string Client::checkHorseExists = "CHECK_HORSE_EXISTS";
-const std::string Client::getUserCredits = "GET_USER_CREDITS";
-const std::string Client::getRaceDate = "GET_RACE_DATE";
-const std::string Client::getNumHorsesOnRace = "GET_NUM_HORSES_ON_RACE";
-const std::string Client::getHorsesOnRace = "GET_HORSES_ON_RACE";
-const std::string Client::checkBetExists = "CHECK_BET_EXISTS";
-const std::string Client::addCredits = "ADD_CREDITS";
-const std::string Client::checkRaceStarted = "CHECK_RACE_STARTED";
-const std::string Client::changeBet = "CHANGE_BET";
-const std::string Client::getAllRaces = "GET_ALL_RACES";
-const std::string Client::hasRaceStarted = "HAS_RACE_STARTED";
-const std::string Client::getRaceLaps = "GET_RACE_LAPS";
-const std::string Client::getHorseRanks = "GET_HORSE_RANKS";
-const std::string Client::getBetsPerUser = "GET_BETS_PER_USER";
-const std::string Client::getAllUsers = "GET_ALL_USERS";
-const std::string Client::getLoggedInUsers_createTempTable = "GET_LOGGED_IN_USERS__CREATE_TEMP_TABLE";
-const std::string Client::getLoggedInUsers_insertIntoTempTable = "GET_LOGGED_IN_USERS__INSERT_INTO_TEMP_TABLE";
-const std::string Client::getLoggedInUsers_getLoggedInUsers = "GET_LOGGED_IN_USERS__GET_LOGGED_IN_USERS";
-const std::string Client::getLoggedInUsers_destroyTempTable = "GET_LOGGED_IN_USERS__DESTROY_TEMP_TABLE";
+//---------------------------BasicUser---------------------------//
+
+BasicUser::BasicUser(int client_socket, int user_id, std::string username, std::string name) :
+	PrivilegeGroup(client_socket, user_id, username, name) {}
+
+std::string BasicUser::getGroupHelp() const {
+	stringstream ret;
+	ret << Utils::makeHeader("Basic User Operations") << endl;
+	ret << Utils::makeCommandDescription("clear","Clears the window") << endl;
+	ret << Utils::makeCommandDescription("quit","Quits the connection to the server") << endl;
+	return ret.str();
+}
+
+void BasicUser::clear(int sid) {
+	if(sid>0)
+	{
+		char clear_str[]="\u001B[2J\u001B[H";
+		write(sid,clear_str,strlen(clear_str));
+	}
+	else
+		system("clear");
+}
+
+void BasicUser::clear() const {
+	clear(client_socket);
+}
+
+bool BasicUser::quit() const	//returns true for quitting and false for not quitting (not enough permissions)
+{
+	if(client_socket<=0)	//if not in server
+		Network::server().shutdown_server();
+	return true;
+}
+
+//---------------------------LoggedOut---------------------------//
+
+LoggedOut::LoggedOut(int client_socket) :
+		PrivilegeGroup(client_socket) {}
+
+std::string LoggedOut::getGroupHelp() const {
+	stringstream ret;
+	ret << Utils::makeHeader("Logged out operations") << endl;
+	ret << Utils::makeCommandDescription("regist <username> <password> <name>","Registers a new user") << endl;
+	ret << Utils::makeCommandDescription("login <username> <password>","Logs the user in" + string((client_socket==Constants::IN_SERVER)?" | Note: Only admins can login in the server":""));
+	return ret.str();
+}
+
+void LoggedOut::regist(std::string login_name, std::string pass, std::string name, bool ad, int cr) const {
+	using namespace SQLPreparedStatementsNames;
+	const PreparedStatement* ps = S.getPreparedStatement(registerNewUser);
+	if(!ps)
+		throw ClientError("Something went wrong!");
+	try {
+		transform(login_name.begin(),login_name.end(),login_name.begin(),::tolower);
+		SQLResult res = ps->run({name, login_name, pass, Utils::b2s(ad), to_string(cr)});
+		if(!res || res.hasError()) {
+			throw ClientError("Error while running the command: " + res.getErrorMessage());
+		}
+	} catch (DBMSErrorRunningPreparedStatement& err) {
+		clog((string)"Error in the register method: " + err.what());
+		throw ClientError("Something went wrong!");
+	} catch (ClientError& err) {
+		throw;
+	}
+}
+
+void LoggedOut::login(std::string login_name, std::string pass) {
+	using namespace SQLPreparedStatementsNames;
+	const PreparedStatement* ps = S.getPreparedStatement(checkUserAndPass);
+	if(!ps)
+		throw ClientError("Something went wrong!");
+	try {
+		transform(login_name.begin(),login_name.end(),login_name.begin(),::tolower);
+		SQLResult res = ps->run({name, login_name, pass, Utils::b2s(ad), to_string(cr)});
+		if(!res || res.hasError()) {
+			throw ClientError("Error while running the command: " + res.getErrorMessage());
+		}
+	} catch (DBMSErrorRunningPreparedStatement& err) {
+		clog((string)"Error in the register method: " + err.what());
+		throw ClientError("Something went wrong!");
+	} catch (ClientError& err) {
+		throw;
+	}
+}
+
+//---------------------------LoggedIn---------------------------//
+
+LoggedIn::LoggedIn(int client_socket, int user_id, std::string username, std::string name) :
+		PrivilegeGroup(client_socket, user_id, username, name) {}
+
+std::string LoggedIn::getGroupHelp() const {
+	stringstream ret;
+	ret << Utils::makeHeader("Logged in user operations") << endl;
+	ret << Utils::makeCommandDescription("watch_race <race_id>","start watching a race") << endl;
+	ret << Utils::makeCommandDescription("logout","");
+	return ret.str();
+}
+
+//TODO: review later
+void LoggedIn::watch_race(int r_i) {
+	if(!RacesManagement::check_race(r_i)) {
+		writeline(client_socket,"Invalid race.");
+		return;
+	}
+	auto temp=races.find(r_i);
+	if(temp==races.end())
+	{
+		writeline(client_socket,"Race not active.");
+		return;
+	}
+	if(temp->second->sockets_watching.find(client_socket)!=temp->second->sockets_watching.end())
+	{
+		writeline(client_socket,"Client already watching the race.");
+	}
+	BasicUser::clear(client_socket);
+	string dummy;
+	temp->second->sockets_watching.insert(client_socket);
+	Network::server().readline(client_socket,dummy);
+	BasicUser::clear(client_socket);
+	temp=races.find(r_i);
+	if(temp==races.end())
+		return;
+	temp->second->sockets_watching.erase(client_socket);
+}
+
+void LoggedIn::logout() {
+	if(user_id==LOGGED_OFF)
+		return;
+	writeline(client_socket,"You are now logged off!");
+	clog("Socket " << client_socket << " which was logged with user_id=" << user_id << ", username \"" << username << "\" and name \"" << name << "\" has logged off");
+	Network::server().clients[client_socket]=user_id=LOGGED_OFF;
+	name="";
+	username="";
+}
+
+//---------------------------SelfManagement---------------------------//
+
+SelfManagement::SelfManagement(int client_socket, int user_id, std::string username, std::string name) :
+		PrivilegeGroup(client_socket, user_id, username, name) {}
+
+//---------------------------UsersManagement---------------------------//
+
+UsersManagement::UsersManagement(int client_socket, int user_id, std::string username, std::string name) :
+		PrivilegeGroup(client_socket, user_id, username, name) {}
+
+//---------------------------HorsesManagement---------------------------//
+
+HorsesManagement::HorsesManagement(int client_socket, int user_id, std::string username, std::string name) :
+		PrivilegeGroup(client_socket, user_id, username, name) {}
+
+//---------------------------RacesManagement---------------------------//
+
+RacesManagement::RacesManagement(int client_socket, int user_id, std::string username, std::string name) :
+		PrivilegeGroup(client_socket, user_id, username, name) {}
+
+//---------------------------BetsManagement---------------------------//
+
+BetsManagement::BetsManagement(int client_socket, int user_id, std::string username, std::string name) :
+		PrivilegeGroup(client_socket, user_id, username, name) {}
+
+//---------------------------LoggedOutClient---------------------------//
+
+LoggedOutClient::LoggedOutClient(int client_socket) :
+		BasicUser(client_socket),
+		LoggedOut(client_socket) {}
+
+void LoggedOutClient::help() const {
+
+}
+
+//---------------------------RegularClient---------------------------//
+
+RegularClient::RegularClient(int client_socket, int user_id, std::string username, std::string name) :
+		BasicUser(client_socket, user_id, username, name),
+		LoggedIn(client_socket, user_id, username, name),
+		SelfManagement(client_socket, user_id, username, name) {}
+
+//---------------------------AdminClient---------------------------//
+
+AdminClient::AdminClient(int client_socket, int user_id, std::string username, std::string name) :
+		RegularClient(client_socket, user_id, username, name),
+		UsersManagement(client_socket, user_id, username, name),
+		HorsesManagement(client_socket, user_id, username, name),
+		RacesManagement(client_socket, user_id, username, name),
+		BetsManagement(client_socket, user_id, username, name) {}
+
+//---------------------------ClientContainer---------------------------//
+
+ClientContainer::ClientContainer(int cl_so) :
+        currentUser(new LoggedOutClient(cl_so)),
+        client_socket(cl_so),
+        username(""),
+        name(""),
+        user_id(LOGGED_OFF) {}
+
+BasicUser* ClientContainer::getCurrentUser() {
+	return currentUser;
+}
+
+void ClientContainer::changeUserType(int type, int u_id, int c_so) {
+	using namespace Constants;
+	if(type != LOGGED_OFF || type != LOGGED_IN || type != ADMIN)
+		throw invalid_argument("Programmer error: New user type must be either LOGGED_IN, LOGGED_OFF or ADMIN");
+	if(currentUser)
+		delete currentUser;
+	switch (type) {
+		case LOGGED_OFF:
+
+	}
+}
+
+ClientContainer::~ClientContainer() {
+	if(currentUser)
+		delete currentUser;
+}
 
 void Client::initPreparedStatements() {
+	using namespace SQLPreparedStatementsNames;
+	//name, username, password, admin, credits
+	if (!S.getPreparedStatement(registerNewUser)) {
+		stringstream query;
+		query << "INSERT INTO users VALUES (DEFAULT, $1, $2, $3, $4, $5);" << endl;
+		S.requestNewPreparedStatement(registerNewUser, query.str());
+	}
+	//user_id, hashed_pass
+	if (!S.getPreparedStatement(checkUserAndPass)) {
+		stringstream query;
+		query << "SELECT user_id, name" << endl;
+		query << "FROM users" << endl;
+		query << "WHERE user_id = $1 AND pass = $2;" << endl;
+		S.requestNewPreparedStatement(checkUserAndPass, query.str());
+	}
 	//login_name
 	if (!S.getPreparedStatement(getUserId)) {
 		stringstream query;
@@ -595,7 +804,7 @@ bool Client::parse( string ins ) //true always except when "\quit" received.
 		else if(command.cmd=="\\show_server_ip")		{writeline(client_socket,"Server_IP: " + string(Network::server().get_ip(Network::server().sockfd)) + ":" + Properties::getDefault().getProperty("PORT"));}
 		//else if(command.cmd=="\\")	 					{}
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		stringstream err_msg;
 		err_msg << "There was an error with the command from socket " << client_socket;
@@ -607,13 +816,13 @@ bool Client::parse( string ins ) //true always except when "\quit" received.
 		{
 			err_msg << " which is logged in as user_id=" << user_id << " username=\"" << username << "\" and name=\"" << name << "\". ";
 		}
-		if(!e.err)
-		{
-			clog(err_msg.str() << "SQL query is NULL.");
-			return true;
-		}
+//		if(!e.err)
+//		{
+//			clog(err_msg.str() << "SQL query is NULL.");
+//			return true;
+//		}
 		//Network::server().writeline(client_socket,"An error that wasn't supposed to have happened has occurred. Please contact the admin");
-		clog(err_msg.str() << "Command: \"" << ins << "\". SQL query error:" << endl << PQresultErrorMessage(e.err));
+		clog(err_msg.str() << "Command: \"" << ins << "\". SQL query error:" << endl << e.what());
 		//PQclear(e.err);
 	}
 	catch(int i)
@@ -691,11 +900,6 @@ Client::~Client()
 	//close(client_socket);
 }
 
-void Client::writeline(int socketfd, string line,bool paragraph)
-{
-	Network::server().writeline(socketfd,line,paragraph);
-}
-
 void Client::regist(string login_name , string pass , string name , bool ad , int cr)	//needs to be erased after use with PQclear()!!!
 {
 	if(!check_valid(login_name))
@@ -728,11 +932,11 @@ void Client::regist(string login_name , string pass , string name , bool ad , in
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog("Error in the query from the \"Client::regist\" function with login_name=\"" << login_name << "\", name=\"" << name << "\", pass=\"" << pass << "\", ad=" << b2s(ad) << " and cr=" << cr);
 		writeline(client_socket,"Error while registering. If the problem persists, please contact the admin.");
-		throw(e);
+		//throw(e);
 	}
 	PQclear(res);
 }
@@ -764,7 +968,7 @@ void Client::login(string login_name, string pass)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)	//implement later
+	catch(DBMSError& e)	//implement later
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::login\" using login_name=\"" << login_name << "\" and pass=\"" << pass << "\"");
 		writeline(client_socket,"There was an error during the login process. If the problem persists, please contact the admin.");
@@ -813,10 +1017,10 @@ bool Client::is_admin(int u)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//cerr << "Unknown error occurred in the query from \"Client::is_admin\" using u=" << u << endl; ;
-		clog("Error in internal function \"Client::is_admin\" using u=" << u << ". Query error: " << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"Client::is_admin\" using u=" << u << ". Query error: " << e.what());
 		//PQclear(e.err);
 		throw (int)1;	//throw something to get caught by "catch(...)" in the parser function
 	}
@@ -891,10 +1095,10 @@ int Client::get_user_id(string login_name)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::get_user_id\" using login_name=\"" << login_name << "\"");
-		clog("Error in internal function \"Client::get_user_id\" using login_name=" << login_name << ".Query error:n" << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"Client::get_user_id\" using login_name=" << login_name << ".Query error:n" << e.what());
 		//PQclear(res);
 		throw (int)2;
 	}
@@ -950,11 +1154,11 @@ void Client::passwd(int id,string old_pass, string new_pass)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog("Query to check old_pass in \"Client::passwd\" glitched. login_name: \"" << username << "\"");
 		writeline(client_socket,"There was a problem with your request. Please contact an admin.");
-		throw(e);
+		//throw(e);
 	}
 	if(PQntuples( res )==0)
 	{
@@ -973,11 +1177,11 @@ void Client::passwd(int id,string old_pass, string new_pass)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog("Query to change the pass in \"Client::passwd\" glitched. new_pass: \"" << new_pass << "\"");
 		writeline(client_socket,"There was a problem with your request.\r\nAre you sure your new password doesn't have illegal characters and has the minimal length?\r\nIf the problem persists, please contact an admin.");
-		throw(e);
+		//throw(e);
 	}
 	writeline(client_socket,"Successfully changed user_id id's password.");
 	PQclear(res);
@@ -1008,11 +1212,11 @@ void Client::change_admin(int id, bool ad)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
 		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-		throw(e);
+		//throw(e);
 	}
 	query.str("");
 	query.clear();
@@ -1041,10 +1245,10 @@ int Client::get_horse_id(string h_name)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::get_user_id\" using login_name=\"" << login_name << "\"");
-		clog("Error in internal function \"Client::get_horse_id\" using horse_name=" << h_name << ".Query error:n" << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"Client::get_horse_id\" using horse_name=" << h_name << ".Query error:n" << e.what());
 		//PQclear(res);
 		throw (int)2;
 	}
@@ -1095,10 +1299,10 @@ void Client::add_horse(double speed , string h_name)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-		throw(e);
+		//throw(e);
 	}
 	query.str("");
 	query.clear();
@@ -1107,10 +1311,10 @@ void Client::add_horse(double speed , string h_name)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		writeline(client_socket,"Error while running your command after adding horse. If the problem persists, please contact the admin.");
-		throw(e);
+		//throw(e);
 	}
 	int h_i=atoi(PQgetvalue(res,0,0));
 	query.str("");
@@ -1173,10 +1377,10 @@ void Client::add_to_race(int race,vector<int> horses)
 		{
 			EXECUTE;
 		}
-		catch(SQL_Error e)
+		catch(DBMSError& e)
 		{
 			writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-			throw(e);
+			//throw(e);
 		}
 		PQclear(res);
 	}
@@ -1203,10 +1407,10 @@ void Client::add_race(int laps)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-		throw(e);
+		//throw(e);
 	}
 	PQclear(res);
 	query.str("");query.clear();
@@ -1218,10 +1422,10 @@ void Client::add_race(int laps)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-		throw(e);
+		//throw(e);
 	}
 	int r_i=stoi(PQgetvalue(res,0,0));
 	PQclear(res);
@@ -1241,10 +1445,10 @@ bool Client::check_race(int r_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::get_user_id\" using login_name=\"" << login_name << "\"");
-		clog("Error in internal function \"Client::check_race\" using race_id=" << r_i << ". Query error:n" << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"Client::check_race\" using race_id=" << r_i << ". Query error:n" << e.what());
 		//PQclear(res);
 		throw (int)2;
 	}
@@ -1270,10 +1474,10 @@ bool Client::check_horse(int h_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::get_user_id\" using login_name=\"" << login_name << "\"");
-		clog("Error in internal function \"Client::check_race\" using race_id=" << h_i << ". Query error:n" << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"Client::check_race\" using race_id=" << h_i << ". Query error:n" << e.what());
 		//PQclear(res);
 		throw (int)2;
 	}
@@ -1299,10 +1503,10 @@ bool Client::check_user(int u_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::get_user_id\" using login_name=\"" << login_name << "\"");
-		clog("Error in internal function \"Client::check_user\" using user_id=" << u_i << ". Query error:n" << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"Client::check_user\" using user_id=" << u_i << ". Query error:n" << e.what());
 		//PQclear(res);
 		throw (int)3;
 	}
@@ -1328,10 +1532,10 @@ double Client::get_user_credits(int u_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::get_user_id\" using login_name=\"" << login_name << "\"");
-		clog("Error in internal function \"Client::get_user_credits\" using user_id=" << u_i << ". Query error: " << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"Client::get_user_credits\" using user_id=" << u_i << ". Query error: " << e.what());
 		//PQclear(res);
 		throw (int)5;
 	}
@@ -1358,10 +1562,10 @@ string Client::get_race_date(int r_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::get_user_id\" using login_name=\"" << login_name << "\"");
-		clog("Error in internal function \"Client::get_race_date\" using race_id=" << r_i << ". Query error: " << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"Client::get_race_date\" using race_id=" << r_i << ". Query error: " << e.what());
 		//PQclear(res);
 		throw (int)8;
 	}
@@ -1386,10 +1590,10 @@ int Client::get_num_horses_on_race(int r_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::get_user_id\" using login_name=\"" << login_name << "\"");
-		clog("Error in internal function \"Client::get_num_horses_on_race\" using race_id=" << r_i << ". Query error: " << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"Client::get_num_horses_on_race\" using race_id=" << r_i << ". Query error: " << e.what());
 		//PQclear(res);
 		throw (int)7;
 	}
@@ -1434,10 +1638,10 @@ int Client::check_all_horses_available(int r_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
-		clog("Error in internal function \"Client::check_all_horses_available\" using race_id=" << r_i <<  ". Query error: " << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"Client::check_all_horses_available\" using race_id=" << r_i <<  ". Query error: " << e.what());
 		throw (int)11;
 	}
 	int n=PQntuples(res);
@@ -1466,10 +1670,10 @@ double Client::check_bet(int u_i,int h_i,int r_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::get_user_id\" using login_name=\"" << login_name << "\"");
-		clog("Error in internal function \"Client::check_bet\" using user_id=" << u_i << ", horse_id=" << h_i << " and race_id=" << r_i <<  ". Query error: " << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"Client::check_bet\" using user_id=" << u_i << ", horse_id=" << h_i << " and race_id=" << r_i <<  ". Query error: " << e.what());
 		//PQclear(res);
 		throw (int)6;
 	}
@@ -1534,11 +1738,11 @@ void Client::add_credits(int u_i, double cr)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
 		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-		throw(e);
+		//throw(e);
 	}
 	PQclear(res);
 }
@@ -1554,10 +1758,10 @@ bool Client::check_race_started(int r_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//cerr << "Unknown error occurred in the query from \"Client::is_admin\" using u=" << u << endl; ;
-		clog("Error in internal function \"Client::get_race_started\" using race_id=" << r_i << ". Query error: " << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"Client::get_race_started\" using race_id=" << r_i << ". Query error: " << e.what());
 		//PQclear(e.err);
 		throw (int)1;	//throw something to get caught by "catch(...)" in the parser function
 	}
@@ -1633,11 +1837,11 @@ void Client::bet(int u_i,int h_i,int r_i,double cr)
 			{
 				EXECUTE;
 			}
-			catch(SQL_Error e)
+			catch(DBMSError& e)
 			{
 				//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
 				writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-				throw(e);
+				//throw(e);
 			}
 			if(u_i==user_id)
 				writeline(client_socket,"Your bet on race_id=" + to_string(r_i) + " and on horse_id=" + to_string(h_i) + " was deleted.");
@@ -1670,11 +1874,11 @@ void Client::bet(int u_i,int h_i,int r_i,double cr)
 		{
 			EXECUTE;
 		}
-		catch(SQL_Error e)
+		catch(DBMSError& e)
 		{
 			//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
 			writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-			throw(e);
+			//throw(e);
 		}
 		if(u_i==user_id)
 			writeline(client_socket,"You had already bet in this race and horse so your previous bet was successfuly replaced by this new one.");
@@ -1708,10 +1912,10 @@ void Client::bet(int u_i,int h_i,int r_i,double cr)
 		{
 			EXECUTE;
 		}
-		catch(SQL_Error e)
+		catch(DBMSError& e)
 		{
 			writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-			throw(e);
+			//throw(e);
 		}
 		writeline(client_socket,"Bet successfuly added to the system.");
 		PQclear(res);
@@ -1778,11 +1982,11 @@ void Client::show_races(string flag)
 		{
 			EXECUTE;
 		}
-		catch(SQL_Error e)
+		catch(DBMSError& e)
 		{
 			//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
 			writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-			throw(e);
+			//throw(e);
 		}
 		S.printResult(res,client_socket);
 		PQclear(res);
@@ -1839,10 +2043,10 @@ bool Client::get_race_started(int r_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::get_user_id\" using login_name=\"" << login_name << "\"");
-		clog("Error in internal function \"Client::get_race_started\" using race_id=" << r_i << ". Query error: " << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"Client::get_race_started\" using race_id=" << r_i << ". Query error: " << e.what());
 		//PQclear(res);
 		throw (int)9;
 	}
@@ -1869,10 +2073,10 @@ int Client::get_race_laps(int r_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::get_user_id\" using login_name=\"" << login_name << "\"");
-		clog("Error in internal function \"Client::get_race_laps\" using race_id=" << r_i << ". Query error: " << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"Client::get_race_laps\" using race_id=" << r_i << ". Query error: " << e.what());
 		//PQclear(res);
 		throw (int)10;
 	}
@@ -1903,11 +2107,11 @@ void Client::show_horses(int n)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
 		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-		throw(e);
+		//throw(e);
 	}
 	S.printResult(res,client_socket);
 	PQclear(res);
@@ -1942,11 +2146,11 @@ void Client::show_user_bets(int u_i,int lim)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
 		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-		throw(e);
+		//throw(e);
 	}
 	S.printResult(res,client_socket);
 	PQclear(res);
@@ -1976,11 +2180,11 @@ void Client::show_users(string opt)
 		{
 			EXECUTE;
 		}
-		catch(SQL_Error e)
+		catch(DBMSError& e)
 		{
 			//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
 			writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-			throw(e);
+			//throw(e);
 		}
 		S.printResult(res,client_socket);
 		PQclear(res);
@@ -1996,11 +2200,11 @@ void Client::show_users(string opt)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
 		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-		throw(e);
+		//throw(e);
 	}
 	query.str("");query.clear();
 	PQclear(res);
@@ -2017,11 +2221,11 @@ void Client::show_users(string opt)
 			{
 				EXECUTE;
 			}
-			catch(SQL_Error e)
+			catch(DBMSError& e)
 			{
 				//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
 				writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-				throw(e);
+				//throw(e);
 			}
 			PQclear(res);
 			query.str("");query.clear();
@@ -2035,11 +2239,11 @@ void Client::show_users(string opt)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
 		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-		throw(e);
+		//throw(e);
 	}
 	query.str("");query.clear();
 	S.printResult(res,client_socket);
@@ -2050,11 +2254,11 @@ void Client::show_users(string opt)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
 		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-		throw(e);
+		//throw(e);
 	}
 	PQclear(res);
 }
@@ -2081,11 +2285,11 @@ void Client::show_horses_on_race(int r_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
 		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
-		throw(e);
+		//throw(e);
 	}
 	S.printResult(res,client_socket);
 	PQclear(res);
@@ -2105,16 +2309,21 @@ void Client::sql_query(string q)
 	{
 		res=SQLServer::server().executeSQL(q);
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
-		writeline(client_socket,"The query entered originated the following error message:.\r\n"+string(PQresultErrorMessage(e.err)));
+		writeline(client_socket,"The query entered originated the following error message:.\r\n"+string(e.what()));
 		clog("User " << user_id << " used the \"sql_query\" command and originated an error. Query inserted:" << endl << q << endl << endl << "Error message:" << endl << PQresultErrorMessage(res));
 		return;
 	}
 	clog("User " << user_id << " used the \"sql_query\" command. Query inserted:" << endl << q);
 	S.printResult(res,client_socket);
 	PQclear(res);
+}
+
+void Client::writeline(int socketfd, string line,bool paragraph) const
+{
+	Network::server().writeline(socketfd,line,paragraph);
 }
 
 using namespace std;
@@ -2155,6 +2364,12 @@ bool arg::isOfType(const type_info& t) const {
 
 //https://en.wikipedia.org/wiki/ANSI_escape_code#CSI_codes	//http://www.termsys.demon.co.uk/vtansi.htm
 
+ClientError::ClientError(const std::string & s) : whatMessage(s) {}
+
+const char* ClientError::what() const throw() {
+	return whatMessage.c_str();
+}
+
 bool check_horse_in_race(int h_i, int r_i)
 {
 	stringstream query;
@@ -2166,10 +2381,10 @@ bool check_horse_in_race(int h_i, int r_i)
 	{
 		EXECUTE;
 	}
-	catch(SQL_Error e)
+	catch(DBMSError& e)
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::get_user_id\" using login_name=\"" << login_name << "\"");
-		clog("Error in internal function \"Client::check_horse_in_race\" using race_id=" << r_i << " and horse_id=" << h_i << ". Query error:n" << PQresultErrorMessage(e.err));
+		clog("Error in internal function \"Client::check_horse_in_race\" using race_id=" << r_i << " and horse_id=" << h_i << ". Query error:n" << e.what());
 		//PQclear(res);
 		throw (int)4;
 	}

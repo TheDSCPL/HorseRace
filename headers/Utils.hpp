@@ -42,6 +42,10 @@ namespace Utils {
 
     template<typename T>
     std::vector<T *> copyDynamicVector(const std::vector<T *> &);
+
+    std::string makeHeader(const std::string &);
+
+    std::string makeCommandDescription(const std::string&, const std::string&);
 }
 
 #endif

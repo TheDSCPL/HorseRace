@@ -213,18 +213,21 @@ PreparedStatement::PreparedStatement(string const &name, string const &declarati
         PGresult *res = PQprepare(S.conn, name.c_str(), declaration.c_str(), Utils::getNumberOfArgs(declaration), NULL);
         ExecStatusType r = PQresultStatus(res);
         if(r != PGRES_COMMAND_OK && r != PGRES_TUPLES_OK) {
-            throw SQL_Error(PQresultErrorMessage(res));
-            //throw SQL_Error(PQerrorMessage(SQLServer::server().conn));
+            string err(PQresultErrorMessage(res));
+            if(err.empty())
+                err = string(PQerrorMessage(SQLServer::server().conn));
+            PQclear(res);
+            throw DBMSErrorCreatingPreparedStatement(err);
         }
         S.preparedStatements.insert(make_pair(name,this));
-        //S.preparedStatements.insert(pair<string, PreparedStatement *>(name, this));
     }
 }
 
 SQLResult PreparedStatement::run(const std::vector<std::string> &args) const {
     const int n = Utils::getNumberOfArgs(declaration);
+    cerr << args.size() << " " << n << endl;
     if(args.size() != n)
-        throw SQL_Error("Prepared statement's arguments don't match the number of arguments that the prepared statement should receive.");
+        throw DBMSErrorRunningPreparedStatement("Prepared statement's arguments don't match the number of arguments that the prepared statement should receive.");
     for(int i = 0 ; i < n ; i++)
         _temp[i] = (char *) args[i].c_str();
 
@@ -296,8 +299,13 @@ void SQLServer::stop() {
 
 PGresult *SQLServer::executeSQL(string const &sql) {
     PGresult *res = PQexec(conn, sql.c_str());
-    if (!(PQresultStatus(res) == PGRES_COMMAND_OK || PQresultStatus(res) == PGRES_TUPLES_OK))
-        throw SQL_Error(res);
+    if (!(PQresultStatus(res) == PGRES_COMMAND_OK || PQresultStatus(res) == PGRES_TUPLES_OK)) {
+        string err(PQresultErrorMessage(res));
+        if(err.empty())
+            err = PQerrorMessage(S.conn);
+        PQclear(res);
+        throw DBMSError(err);
+    }
 
     return res;
 }
@@ -337,18 +345,18 @@ const PreparedStatement *SQLServer::getPreparedStatement(std::string const &name
     return it->second;
 }
 
-//------------------------------------------ SQL_Error ------------------------------------------//
+//------------------------------------------ DBMS Errors ------------------------------------------//
 
-SQL_Error::SQL_Error(PGresult *e) : err(e) {}
+DBMSError::DBMSError(const DBMSError &e) : whatMessage(e.whatMessage) {}
 
-SQL_Error::SQL_Error(const SQL_Error &e) : err(e.err) {}
+DBMSError::DBMSError(const std::string &s) : whatMessage(s) {}
 
-SQL_Error::SQL_Error(const std::string &s) { cerr << s << endl; }
+DBMSError::~DBMSError() {}
 
-SQL_Error::~SQL_Error() {
-    //PQclear(err);
+DBMSErrorCreatingPreparedStatement::DBMSErrorCreatingPreparedStatement(const std::string & s) : DBMSError(s) {}
+
+DBMSErrorRunningPreparedStatement::DBMSErrorRunningPreparedStatement(const std::string & s) : DBMSError(s) {}
+
+const char* DBMSError::what() const throw() {
+    return whatMessage.c_str();
 }
-
-//------------------------------------------ TupleConversionError ------------------------------------------//
-
-TupleConversionError::TupleConversionError(const std::string &err) : logic_error(err) {}
