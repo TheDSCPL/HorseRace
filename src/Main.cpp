@@ -6,6 +6,7 @@
 #include "../headers/Client.hpp"
 #include "../headers/SHA.hpp"
 #include "../headers/Utils.hpp"
+#include "../headers/Thread.hpp"
 
 #include <ctime>
 #include <stdlib.h>
@@ -27,14 +28,52 @@ void* watchdog_routine(void* v)
 	return NULL;
 }
 
+/*void count(int a, ThreadCondition& t) {
+    Mutex m;
+    m.lock();
+    t.timedWait(m,2500);
+    //t.wait(m);
+    for(int i = 1 ; i<=5 ; i++) {
+        if(i>1)
+            Thread::usleep(500L+(long)((double)rand()/RAND_MAX*500));
+        cerr << a << ": " << i << endl;
+    }
+    cerr << a << " is finished" << endl;
+    m.unlock();
+}*/
+
 int main(int argc, char *argv[])
 {
-	cout.rdbuf()->pubsetbuf(NULL,0);
-	setvbuf ( stdout , NULL , _IONBF , 0 );
+    srand(time(NULL));
+
+    cout.rdbuf()->pubsetbuf(NULL, 0);
+    setvbuf(stdout, NULL, _IONBF, 0);
 
     //cout << Utils::stod("-9.1234") << endl;
 
     SQLServer::server().start();
+
+    /*ThreadCondition t;
+
+    Thread t1([&t](){
+        count(1,t);
+    }), t2([&t](){
+        count(2,t);
+    });
+
+    t1.start();
+    t2.start();
+
+    cerr << "Main's first \"come on in\"" << endl;
+    t.signal();
+
+    //Thread::usleep(3000);
+
+    //cerr << "Main's second \"come on in\"" << endl;
+    //t.signal();
+
+    t1.join();
+    t2.join();*/
 
     /*string query = "SELECT * FROM test1 WHERE p_key = $1;";
 
@@ -77,49 +116,46 @@ int main(int argc, char *argv[])
 
     res.getResultTable().print(cout);*/
 
-    srand(time(NULL));
+    system("clear");
 
-	system("clear");
+    clog("Program has started");
 
-	clog( "Program has started" );
+    Network::server();    //creates the sockets server. check sockets.hpp for the definition of this macro//
 
-	Network::server();	//creates the sockets server. check sockets.hpp for the definition of this macro//
+    //--------------------------------SERVER CLIENT ROUTINE---------------------------------//
 
-	//--------------------------------SERVER CLIENT ROUTINE---------------------------------//
+    Client c;
 
- 	Client c;
+    cout << "> ";
 
- 	cout << "> ";
+    for (string input; getline(cin, input); cout << "> ") {
+        if (!c.parse(input))
+            break;
+    }
 
-	for( string input ; getline(cin,input) ; cout << "> " )
-	{
-		if(!c.parse(input))
-			break;
-	}
+    //------------------------------SHUTTING DOWN------------------------------//
 
-	//------------------------------SHUTTING DOWN------------------------------//
+    pthread_t watchdog;
+    pthread_create(&watchdog, NULL, watchdog_routine, NULL);
 
-	pthread_t watchdog;
-	pthread_create(&watchdog,NULL,watchdog_routine,NULL);
+    while (races.size()) usleep(500);
 
-	while(races.size())	usleep(0.5*1000000);
-
-	/*cout << SHA_256_digest("password") << endl;
+    /*cout << SHA_256_digest("password") << endl;
     cout << SHA_512_digest("password") << endl;
     cout << SHA_256_digest("ole") << endl;
     cout << SHA_256_digest("ola") << endl;
     cout << SHA_256_digest("ola") << endl;*/
 
-	/*try {
-		//Properties p("p.properties");
-		const Properties& p = Properties::getDefault();
-		list<string> l = p.getProperties();
-		for(list<string>::iterator it = l.begin() ; it != l.end() ; it++)
-			cout << *it << endl;
-		cout << p.getProperty("oli") << endl;
-	} catch (const PropertiesException& ex) {
-		cerr << "Error! What: " << ex.what() << endl;
-	}*/
-	
-  return 0; 
+    /*try {
+        //Properties p("p.properties");
+        const Properties& p = Properties::getDefault();
+        list<string> l = p.getProperties();
+        for(list<string>::iterator it = l.begin() ; it != l.end() ; it++)
+            cout << *it << endl;
+        cout << p.getProperty("oli") << endl;
+    } catch (const PropertiesException& ex) {
+        cerr << "Error! What: " << ex.what() << endl;
+    }*/
+
+    return 0;
 }

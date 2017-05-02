@@ -50,6 +50,7 @@ public:
 
 public:
 
+    //TODO: Change to ClientContainer!
     std::map<int, int> clients; //key=socket, value=user_id if logged and LOGGED_OFF if not
 
     std::set<pthread_t> socket_threads;

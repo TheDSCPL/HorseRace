@@ -11,3 +11,4 @@
 -implement the prepared statements
 -correct the bug of the initialization of the commands
 -improve the SQL exceptions
+-delete the num_horses_race SQL function

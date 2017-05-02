@@ -46,6 +46,8 @@ namespace Utils {
     std::string makeHeader(const std::string &);
 
     std::string makeCommandDescription(const std::string&, const std::string&);
+
+    std::string makeCommandDescriptionNote(const std::string &);
 }
 
 #endif

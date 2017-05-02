@@ -20,235 +20,6 @@ using namespace Constants;
 #define vcout if(false) cout
 #endif
 
-//---------------------------PrivilegeGroup---------------------------//
-
-PrivilegeGroup::PrivilegeGroup(int client_socket, int user_id, std::string username, std::string name) :
-		client_socket(client_socket),
-		user_id(user_id),
-		username(username),
-		name(name) {}
-
-void PrivilegeGroup::writeline(int socketfd, string line,bool paragraph) const
-{
-	Network::server().writeline(socketfd,line,paragraph);
-}
-
-//---------------------------BasicUser---------------------------//
-
-BasicUser::BasicUser(int client_socket, int user_id, std::string username, std::string name) :
-	PrivilegeGroup(client_socket, user_id, username, name) {}
-
-std::string BasicUser::getGroupHelp() const {
-	stringstream ret;
-	ret << Utils::makeHeader("Basic User Operations") << endl;
-	ret << Utils::makeCommandDescription("clear","Clears the window") << endl;
-	ret << Utils::makeCommandDescription("quit","Quits the connection to the server") << endl;
-	return ret.str();
-}
-
-void BasicUser::clear(int sid) {
-	if(sid>0)
-	{
-		char clear_str[]="\u001B[2J\u001B[H";
-		write(sid,clear_str,strlen(clear_str));
-	}
-	else
-		system("clear");
-}
-
-void BasicUser::clear() const {
-	clear(client_socket);
-}
-
-bool BasicUser::quit() const	//returns true for quitting and false for not quitting (not enough permissions)
-{
-	if(client_socket<=0)	//if not in server
-		Network::server().shutdown_server();
-	return true;
-}
-
-//---------------------------LoggedOut---------------------------//
-
-LoggedOut::LoggedOut(int client_socket) :
-		PrivilegeGroup(client_socket) {}
-
-std::string LoggedOut::getGroupHelp() const {
-	stringstream ret;
-	ret << Utils::makeHeader("Logged out operations") << endl;
-	ret << Utils::makeCommandDescription("regist <username> <password> <name>","Registers a new user") << endl;
-	ret << Utils::makeCommandDescription("login <username> <password>","Logs the user in" + string((client_socket==Constants::IN_SERVER)?" | Note: Only admins can login in the server":""));
-	return ret.str();
-}
-
-void LoggedOut::regist(std::string login_name, std::string pass, std::string name, bool ad, int cr) const {
-	using namespace SQLPreparedStatementsNames;
-	const PreparedStatement* ps = S.getPreparedStatement(registerNewUser);
-	if(!ps)
-		throw ClientError("Something went wrong!");
-	try {
-		transform(login_name.begin(),login_name.end(),login_name.begin(),::tolower);
-		SQLResult res = ps->run({name, login_name, pass, Utils::b2s(ad), to_string(cr)});
-		if(!res || res.hasError()) {
-			throw ClientError("Error while running the command: " + res.getErrorMessage());
-		}
-	} catch (DBMSErrorRunningPreparedStatement& err) {
-		clog((string)"Error in the register method: " + err.what());
-		throw ClientError("Something went wrong!");
-	} catch (ClientError& err) {
-		throw;
-	}
-}
-
-void LoggedOut::login(std::string login_name, std::string pass) {
-	using namespace SQLPreparedStatementsNames;
-	const PreparedStatement* ps = S.getPreparedStatement(checkUserAndPass);
-	if(!ps)
-		throw ClientError("Something went wrong!");
-	try {
-		transform(login_name.begin(),login_name.end(),login_name.begin(),::tolower);
-		SQLResult res = ps->run({name, login_name, pass, Utils::b2s(ad), to_string(cr)});
-		if(!res || res.hasError()) {
-			throw ClientError("Error while running the command: " + res.getErrorMessage());
-		}
-	} catch (DBMSErrorRunningPreparedStatement& err) {
-		clog((string)"Error in the register method: " + err.what());
-		throw ClientError("Something went wrong!");
-	} catch (ClientError& err) {
-		throw;
-	}
-}
-
-//---------------------------LoggedIn---------------------------//
-
-LoggedIn::LoggedIn(int client_socket, int user_id, std::string username, std::string name) :
-		PrivilegeGroup(client_socket, user_id, username, name) {}
-
-std::string LoggedIn::getGroupHelp() const {
-	stringstream ret;
-	ret << Utils::makeHeader("Logged in user operations") << endl;
-	ret << Utils::makeCommandDescription("watch_race <race_id>","start watching a race") << endl;
-	ret << Utils::makeCommandDescription("logout","");
-	return ret.str();
-}
-
-//TODO: review later
-void LoggedIn::watch_race(int r_i) {
-	if(!RacesManagement::check_race(r_i)) {
-		writeline(client_socket,"Invalid race.");
-		return;
-	}
-	auto temp=races.find(r_i);
-	if(temp==races.end())
-	{
-		writeline(client_socket,"Race not active.");
-		return;
-	}
-	if(temp->second->sockets_watching.find(client_socket)!=temp->second->sockets_watching.end())
-	{
-		writeline(client_socket,"Client already watching the race.");
-	}
-	BasicUser::clear(client_socket);
-	string dummy;
-	temp->second->sockets_watching.insert(client_socket);
-	Network::server().readline(client_socket,dummy);
-	BasicUser::clear(client_socket);
-	temp=races.find(r_i);
-	if(temp==races.end())
-		return;
-	temp->second->sockets_watching.erase(client_socket);
-}
-
-void LoggedIn::logout() {
-	if(user_id==LOGGED_OFF)
-		return;
-	writeline(client_socket,"You are now logged off!");
-	clog("Socket " << client_socket << " which was logged with user_id=" << user_id << ", username \"" << username << "\" and name \"" << name << "\" has logged off");
-	Network::server().clients[client_socket]=user_id=LOGGED_OFF;
-	name="";
-	username="";
-}
-
-//---------------------------SelfManagement---------------------------//
-
-SelfManagement::SelfManagement(int client_socket, int user_id, std::string username, std::string name) :
-		PrivilegeGroup(client_socket, user_id, username, name) {}
-
-//---------------------------UsersManagement---------------------------//
-
-UsersManagement::UsersManagement(int client_socket, int user_id, std::string username, std::string name) :
-		PrivilegeGroup(client_socket, user_id, username, name) {}
-
-//---------------------------HorsesManagement---------------------------//
-
-HorsesManagement::HorsesManagement(int client_socket, int user_id, std::string username, std::string name) :
-		PrivilegeGroup(client_socket, user_id, username, name) {}
-
-//---------------------------RacesManagement---------------------------//
-
-RacesManagement::RacesManagement(int client_socket, int user_id, std::string username, std::string name) :
-		PrivilegeGroup(client_socket, user_id, username, name) {}
-
-//---------------------------BetsManagement---------------------------//
-
-BetsManagement::BetsManagement(int client_socket, int user_id, std::string username, std::string name) :
-		PrivilegeGroup(client_socket, user_id, username, name) {}
-
-//---------------------------LoggedOutClient---------------------------//
-
-LoggedOutClient::LoggedOutClient(int client_socket) :
-		BasicUser(client_socket),
-		LoggedOut(client_socket) {}
-
-void LoggedOutClient::help() const {
-
-}
-
-//---------------------------RegularClient---------------------------//
-
-RegularClient::RegularClient(int client_socket, int user_id, std::string username, std::string name) :
-		BasicUser(client_socket, user_id, username, name),
-		LoggedIn(client_socket, user_id, username, name),
-		SelfManagement(client_socket, user_id, username, name) {}
-
-//---------------------------AdminClient---------------------------//
-
-AdminClient::AdminClient(int client_socket, int user_id, std::string username, std::string name) :
-		RegularClient(client_socket, user_id, username, name),
-		UsersManagement(client_socket, user_id, username, name),
-		HorsesManagement(client_socket, user_id, username, name),
-		RacesManagement(client_socket, user_id, username, name),
-		BetsManagement(client_socket, user_id, username, name) {}
-
-//---------------------------ClientContainer---------------------------//
-
-ClientContainer::ClientContainer(int cl_so) :
-        currentUser(new LoggedOutClient(cl_so)),
-        client_socket(cl_so),
-        username(""),
-        name(""),
-        user_id(LOGGED_OFF) {}
-
-BasicUser* ClientContainer::getCurrentUser() {
-	return currentUser;
-}
-
-void ClientContainer::changeUserType(int type, int u_id, int c_so) {
-	using namespace Constants;
-	if(type != LOGGED_OFF || type != LOGGED_IN || type != ADMIN)
-		throw invalid_argument("Programmer error: New user type must be either LOGGED_IN, LOGGED_OFF or ADMIN");
-	if(currentUser)
-		delete currentUser;
-	switch (type) {
-		case LOGGED_OFF:
-
-	}
-}
-
-ClientContainer::~ClientContainer() {
-	if(currentUser)
-		delete currentUser;
-}
-
 void Client::initPreparedStatements() {
 	using namespace SQLPreparedStatementsNames;
 	//name, username, password, admin, credits
@@ -257,44 +28,36 @@ void Client::initPreparedStatements() {
 		query << "INSERT INTO users VALUES (DEFAULT, $1, $2, $3, $4, $5);" << endl;
 		S.requestNewPreparedStatement(registerNewUser, query.str());
 	}
-	//user_id, hashed_pass
+    //login_name
+    if (!S.getPreparedStatement(getUserId)) {
+        stringstream query;
+        query << "SELECT user_id, name" << endl;
+        query << "FROM users" << endl;
+        query << "WHERE username = $1;";
+        S.requestNewPreparedStatement(getUserId, query.str());
+    }
+    //username, hashed_pass
 	if (!S.getPreparedStatement(checkUserAndPass)) {
 		stringstream query;
-		query << "SELECT user_id, name" << endl;
+        query << "SELECT user_id, name, admin" << endl;
 		query << "FROM users" << endl;
-		query << "WHERE user_id = $1 AND pass = $2;" << endl;
+        query << "WHERE username = $1 AND pass = $2;" << endl;
 		S.requestNewPreparedStatement(checkUserAndPass, query.str());
 	}
-	//login_name
-	if (!S.getPreparedStatement(getUserId)) {
-		stringstream query;
-		query << "SELECT user_id, name" << endl;
-		query << "FROM users" << endl;
-		query << "WHERE username = $1;";
-		S.requestNewPreparedStatement(getUserId, query.str());
-	}
-	//user_id, hashed_pass
-	if (!S.getPreparedStatement(checkUserAndPass)) {
-		stringstream query;
-		query << "SELECT user_id, name" << endl;
-		query << "FROM users" << endl;
-		query << "WHERE user_id = $1 AND pass = $2;" << endl;
-		S.requestNewPreparedStatement(checkUserAndPass, query.str());
-	}
-	//new_pass, user_id, old_pass
+    //user_id, new_pass, old_pass
 	if (!S.getPreparedStatement(changePassword)) {
 		stringstream query;
 		query << "UPDATE users" << endl;
-		query << "SET pass = $1" << endl;
-		query << "WHERE user_id = $2 AND pass = $3;";
+        query << "SET pass = $2" << endl;
+        query << "WHERE user_id = $1 AND pass = $3;";
 		S.requestNewPreparedStatement(changePassword, query.str());
 	}
-	//admin(boolean as string), user_id
+    //user_id, admin
 	if (!S.getPreparedStatement(changeAdmin)) {
 		stringstream query;
 		query << "UPDATE users" << endl;
-		query << "SET admin = $1" << endl;
-		query << "WHERE user_id = $2;";
+        query << "SET admin = $2" << endl;
+        query << "WHERE user_id = $1;";
 		S.requestNewPreparedStatement(changeAdmin, query.str());
 	}
 	//horse_name
@@ -375,7 +138,9 @@ void Client::initPreparedStatements() {
 	//race_id
 	if (!S.getPreparedStatement(getNumHorsesOnRace)) {
 		stringstream query;
-		query << "SELECT num_horses_race($1);" << endl;
+        query << "SELECT  COUNT(horse_id)" << endl;
+        query << "FROM    are_on" << endl;
+        query << "WHERE   race_id = r_i;";
 		S.requestNewPreparedStatement(getNumHorsesOnRace, query.str());
 	}
 	//race_id
@@ -395,12 +160,12 @@ void Client::initPreparedStatements() {
 		query << "WHERE user_id = $1 AND horse_id = $2 AND race_id = $3;";
 		S.requestNewPreparedStatement(checkBetExists, query.str());
 	}
-	//credits delta, user_id
+    //user_id, credits delta
 	if (!S.getPreparedStatement(addCredits)) {
 		stringstream query;
 		query << "UPDATE users" << endl;
-		query << "SET credits = credits + $1" << endl;
-		query << "WHERE user_id = $2;" << endl;
+        query << "SET credits = credits + $2" << endl;
+        query << "WHERE user_id = $1;" << endl;
 		S.requestNewPreparedStatement(addCredits, query.str());
 	}
 	//race_id
@@ -409,7 +174,7 @@ void Client::initPreparedStatements() {
         query << "SELECT started FROM races WHERE race_id = $1;";
 		S.requestNewPreparedStatement(checkRaceStarted, query.str());
 	}
-    //user_id, horse_id, race_id, previous_bet_value
+    //user_id, horse_id, race_id, new_bet
     if (!S.getPreparedStatement(changeBet)) {
         stringstream query;
         query << "SELECT changeBet($1,$2,$3,$4);" << endl;
@@ -438,12 +203,12 @@ void Client::initPreparedStatements() {
         query << "WHERE race_id = $1;";
         S.requestNewPreparedStatement(getRaceLaps, query.str());
     }
-    //maxNumberOfHorses
+    //maxNumberOfHorses (if 0 or negative, shows 5 horses)
     if (!S.getPreparedStatement(getHorseRanks)) {
         stringstream query;
         query << "SELECT *" << endl;
         query << "FROM horse_ranks" << endl;
-        query << "LIMIT CASE WHEN $1 < 0 THEN 5 ELSE $1 END;";
+        query << "LIMIT CASE WHEN $1 <= 0 THEN 5 ELSE $1 END;";
         S.requestNewPreparedStatement(getHorseRanks, query.str());
     }
     //user_id, maxNumberOfHorses
@@ -453,7 +218,7 @@ void Client::initPreparedStatements() {
         query << "FROM bets" << endl;
         query << "WHERE user_id = $1" << endl;
         query << "ORDER BY race_id DESC , horse_id" << endl;
-        query << "LIMIT CASE WHEN $1 < 0 THEN 5 ELSE $1 END;";
+        query << "LIMIT CASE WHEN $2 < 0 THEN 5 ELSE $2 END;";
         S.requestNewPreparedStatement(getBetsPerUser, query.str());
     }
     //
@@ -463,6 +228,11 @@ void Client::initPreparedStatements() {
         query << "FROM users" << endl;
         query << "ORDER BY user_id;" << endl;
         S.requestNewPreparedStatement(getAllUsers, query.str());
+    }
+    if (!S.getPreparedStatement(getLoggedInUsers_dropTempTableIfExists)) {
+        stringstream query;
+        query << "DROP TABLE IF EXISTS foo;" << endl;
+        S.requestNewPreparedStatement(getLoggedInUsers_dropTempTableIfExists, query.str());
     }
     //
     if (!S.getPreparedStatement(getLoggedInUsers_createTempTable)) {
@@ -482,7 +252,7 @@ void Client::initPreparedStatements() {
     if (!S.getPreparedStatement(getLoggedInUsers_getLoggedInUsers)) {
         stringstream query;
         query << "SELECT user_id,client_socket,name,username,admin,credits" << endl;
-        query << "FROM users JOIN foo USING (user_id)" << endl;
+        query << "FROM users RIGHT JOIN foo USING (user_id)" << endl;
         query << "ORDER BY user_id;" << endl;
         S.requestNewPreparedStatement(getLoggedInUsers_getLoggedInUsers, query.str());
     }
@@ -584,7 +354,7 @@ parsed_command Client::get_parsed_command(string input)
 	auto it=commands.find(buffer);
 	if(it==commands.end())
 	{
-		writeline(client_socket,"Command \""+buffer+"\" is invalid.");
+        writeline("Command \"" + buffer + "\" is invalid.");
 		return parsed_command{"",{}};
 	}
     parsed_command command{"", it->second};
@@ -596,7 +366,7 @@ parsed_command Client::get_parsed_command(string input)
 	{
 		if(place>=size)	//was still waiting for arguments but there are none left
 		{
-			writeline(client_socket,"Too few arguments inserted.");
+            writeline("Too few arguments inserted.");
 			command.args.clear();
 			command.cmd.clear();
 			return command;
@@ -629,7 +399,7 @@ parsed_command Client::get_parsed_command(string input)
 				}
 				catch(...)
 				{
-					writeline(client_socket,"Argument "+to_string(i+tt.size()+1)+" (\""+buffer+"\") is not an integer.");
+                    writeline("Argument " + to_string(i + tt.size() + 1) + " (\"" + buffer + "\") is not an integer.");
 					command.args.clear();
 					command.cmd.clear();
 					return command;
@@ -644,7 +414,7 @@ parsed_command Client::get_parsed_command(string input)
 		{
 			if(!Utils::is_bool(buffer))
 			{
-				writeline(client_socket,"Argument "+to_string(i+1)+" (\""+buffer+"\") is not a bool.");
+                writeline("Argument " + to_string(i + 1) + " (\"" + buffer + "\") is not a bool.");
 				command.args.clear();
 				command.cmd.clear();
 				return command;
@@ -661,7 +431,7 @@ parsed_command Client::get_parsed_command(string input)
 			}
 			catch(...)
 			{
-				writeline(client_socket,"Argument "+to_string(i+1)+" (\""+buffer+"\") is not an integer.");
+                writeline("Argument " + to_string(i + 1) + " (\"" + buffer + "\") is not an integer.");
 				command.args.clear();
 				command.cmd.clear();
 				return command;
@@ -678,7 +448,7 @@ parsed_command Client::get_parsed_command(string input)
 			}
 			catch(...)
 			{
-				writeline(client_socket,"Argument "+to_string(i+1)+" (\""+buffer+"\") is not a number.");
+                writeline("Argument " + to_string(i + 1) + " (\"" + buffer + "\") is not a number.");
 				command.args.clear();
 				command.cmd.clear();
 				return command;
@@ -694,60 +464,76 @@ parsed_command Client::get_parsed_command(string input)
 void Client::help()
 {
 	clear();
-	writeline(client_socket,"\r\n\u001B[30;41m----------HELP MENU---------\u001B[0m\r\n");
-	writeline(client_socket,"\u001B[30;42m->\"\\clear\"\u001B[0m - Clears the window");
-	if(!(client_socket<=0&&user_id<=0)) writeline(client_socket,"\u001B[30;42m->\"\\quit\"\u001B[0m - Quits the connection to the server.");
+    writeline("\r\n\u001B[30;41m----------HELP MENU---------\u001B[0m\r\n");
+    writeline("\u001B[30;42m->\"\\clear\"\u001B[0m - Clears the window");
+    if (!(client_socket <= 0 && user_id <= 0))
+        writeline("\u001B[30;42m->\"\\quit\"\u001B[0m - Quits the connection to the server.");
 	if(user_id<=0)
 	{
-		writeline(client_socket,"\u001B[30;42m->\"\\login <username> <password>\"\u001B[0m - Logs the user in.");
-		if(client_socket<=0) writeline(client_socket,"                                 - Note: Only admins can login in the server.");
-		writeline(client_socket,"\u001B[30;42m->\"\\register <username> <password> <name>\"\u001B[0m - Registers a new user.");
-		writeline(client_socket,"\u001B[30;42m->\"\\start_race <race_id>\"\u001B[0m - to start a race.");
+        writeline("\u001B[30;42m->\"\\login <username> <password>\"\u001B[0m - Logs the user in.");
+        if (client_socket <= 0)
+            writeline("                                 - Note: Only admins can login in the server.");
+        writeline("\u001B[30;42m->\"\\register <username> <password> <name>\"\u001B[0m - Registers a new user.");
+        writeline("\u001B[30;42m->\"\\start_race <race_id>\"\u001B[0m - to start a race.");
 		return;
 	}
-	writeline(client_socket,"\r\n\u001B[30;41m----------USER FUNCTIONS---------\u001B[0m\r\n");
-	writeline(client_socket,"\u001B[30;42m->\"\\logout\"\u001B[0m - Logs out of the account.");
-	writeline(client_socket,"\u001B[30;42m->\"\\passwd <old_pass> <new_pass> <new_pass>\"\u001B[0m - Change your password.");
-	writeline(client_socket,"\u001B[30;42m->\"\\bet <horse_id> <race_id> <ammount>\"\u001B[0m - Use this command to bet on a race and horse.");
-	writeline(client_socket,"                                        - Note1: You can't change or add a bet on a race that has already started.");
-	writeline(client_socket,"                                        - Note2: If you have already bet on a race and horse but want to change the bet, just use the command like it is the first time you wer betting. It will change your previous bet and adjust your credits accordingly.");
-	writeline(client_socket,"                                        - Note3: If you want to delete a bet you made previously, bet again and put 0 on the ammount. It will delete your bet and give you your credits back.");
-	writeline(client_socket,"\u001B[30;42m->\"\\show_bets <lim>\"\u001B[0m - shows the bets of the logged user.");
-	writeline(client_socket,"                     - Note1: Set lim to zero to see all bets or to a number greater than zero if you want to see only that number of bets.");
-	writeline(client_socket,"                     - Note2: Bets are ordered in a way that the most recent ones are the ones at the top.");
-	writeline(client_socket,"\u001B[30;42m->\"\\show_all_horses\"\u001B[0m - to see every horse and their  ranks.");
-	writeline(client_socket,"\u001B[30;42m->\"\\show_some_horses <n>\"\u001B[0m - to see the best 'n' horses and their ranks.");
-	writeline(client_socket,"\u001B[30;42m->\"\\show_horses_on_race <race_id>\"\u001B[0m - to see the horses that are in a race.");
-	writeline(client_socket,"\u001B[30;42m->\"\\show_races <ops>\"\u001B[0m - to show races.");
-	writeline(client_socket,"                      - Note: ops=\"all\" to show all races and \"active\" to show only races active at the moment.");
-	writeline(client_socket,"\u001B[30;42m->\"\\show_race_info <race_id>\"\u001B[0m - to show information on a race.");
+    writeline("\r\n\u001B[30;41m----------USER FUNCTIONS---------\u001B[0m\r\n");
+    writeline("\u001B[30;42m->\"\\logout\"\u001B[0m - Logs out of the account.");
+    writeline("\u001B[30;42m->\"\\passwd <old_pass> <new_pass> <new_pass>\"\u001B[0m - Change your password.");
+    writeline(
+            "\u001B[30;42m->\"\\bet <horse_id> <race_id> <ammount>\"\u001B[0m - Use this command to bet on a race and horse.");
+    writeline(
+            "                                        - Note1: You can't change or add a bet on a race that has already started.");
+    writeline(
+            "                                        - Note2: If you have already bet on a race and horse but want to change the bet, just use the command like it is the first time you wer betting. It will change your previous bet and adjust your credits accordingly.");
+    writeline(
+            "                                        - Note3: If you want to delete a bet you made previously, bet again and put 0 on the ammount. It will delete your bet and give you your credits back.");
+    writeline("\u001B[30;42m->\"\\show_bets <lim>\"\u001B[0m - shows the bets of the logged user.");
+    writeline(
+            "                     - Note1: Set lim to zero to see all bets or to a number greater than zero if you want to see only that number of bets.");
+    writeline(
+            "                     - Note2: Bets are ordered in a way that the most recent ones are the ones at the top.");
+    writeline("\u001B[30;42m->\"\\show_all_horses\"\u001B[0m - to see every horse and their  ranks.");
+    writeline("\u001B[30;42m->\"\\show_some_horses <n>\"\u001B[0m - to see the best 'n' horses and their ranks.");
+    writeline("\u001B[30;42m->\"\\show_horses_on_race <race_id>\"\u001B[0m - to see the horses that are in a race.");
+    writeline("\u001B[30;42m->\"\\show_races <ops>\"\u001B[0m - to show races.");
+    writeline(
+            "                      - Note: ops=\"all\" to show all races and \"active\" to show only races active at the moment.");
+    writeline("\u001B[30;42m->\"\\show_race_info <race_id>\"\u001B[0m - to show information on a race.");
 
 
 	if(is_admin(user_id))
 	{
-		writeline(client_socket,"\r\n\u001B[30;41m----------ADMIN FUNCTIONS (user related)---------\u001B[0m\r\n");
-		writeline(client_socket,"\u001B[30;42m->\"\\change_admin <username> <bool>\"\u001B[0m - to change user rights.");
-		writeline(client_socket,"                                    - Note: the originals cannot stop being admins.");
-		writeline(client_socket,"\u001B[30;42m->\"\\change_admin_id <user_id> <bool>\"\u001B[0m - same as the last but using user_id.");
-		writeline(client_socket,"\u001B[30;42m->\"\\passwd_other <username> <new_pass> <new_pass>\"\u001B[0m - change a user's password.");
-		writeline(client_socket,"\u001B[30;42m->\"\\passwd_other_id <user_id> <new_pass> <new_pass>\"\u001B[0m - same as the last but using user_id.");
-		writeline(client_socket,"\u001B[30;42m->\"\\show_users <\"a\"/\"l\">\"\u001B[0m - show all users if \"a\" or show only logged users if \"l\".");
-		writeline(client_socket,"\u001B[30;42m->\"\\show_bets_other <user_id> <lim>\"\u001B[0m - same as \"show_bets\" but for any user_id.");
+        writeline("\r\n\u001B[30;41m----------ADMIN FUNCTIONS (user related)---------\u001B[0m\r\n");
+        writeline("\u001B[30;42m->\"\\change_admin <username> <bool>\"\u001B[0m - to change user rights.");
+        writeline("                                    - Note: the originals cannot stop being admins.");
+        writeline(
+                "\u001B[30;42m->\"\\change_admin_id <user_id> <bool>\"\u001B[0m - same as the last but using user_id.");
+        writeline(
+                "\u001B[30;42m->\"\\passwd_other <username> <new_pass> <new_pass>\"\u001B[0m - change a user's password.");
+        writeline(
+                "\u001B[30;42m->\"\\passwd_other_id <user_id> <new_pass> <new_pass>\"\u001B[0m - same as the last but using user_id.");
+        writeline(
+                "\u001B[30;42m->\"\\show_users <\"a\"/\"l\">\"\u001B[0m - show all users if \"a\" or show only logged users if \"l\".");
+        writeline(
+                "\u001B[30;42m->\"\\show_bets_other <user_id> <lim>\"\u001B[0m - same as \"show_bets\" but for any user_id.");
 
-		writeline(client_socket,"\r\n\u001B[30;41m----------ADMIN FUNCTIONS (horses related)---------\u001B[0m\r\n");
-		writeline(client_socket,"\u001B[30;42m->\"\\add_horse <speed> <horse name>\"\u001B[0m - to add a horse.");
-		writeline(client_socket,"\u001B[30;42m->\"\\bet_other <user_id> <horse_id> <race_id> <ammount>\"\u001B[0m - same as \"bet\" but for a generic user_id.");
+        writeline("\r\n\u001B[30;41m----------ADMIN FUNCTIONS (horses related)---------\u001B[0m\r\n");
+        writeline("\u001B[30;42m->\"\\add_horse <speed> <horse name>\"\u001B[0m - to add a horse.");
+        writeline(
+                "\u001B[30;42m->\"\\bet_other <user_id> <horse_id> <race_id> <ammount>\"\u001B[0m - same as \"bet\" but for a generic user_id.");
 
-		writeline(client_socket,"\r\n\u001B[30;41m----------ADMIN FUNCTIONS (races related)---------\u001B[0m\r\n");
-		writeline(client_socket,"\u001B[30;42m->\"\\start_race <race_id>\"\u001B[0m - starts a race.");
-		writeline(client_socket,"\u001B[30;42m->\"\\add_race <laps>\"\u001B[0m - adds a race.");
-		writeline(client_socket,"\u001B[30;42m->\"\\add_to_race <race_id> <[all the horses to add separated by spaces]>\"\u001B[0m - to add a list of horses to a race.");
+        writeline("\r\n\u001B[30;41m----------ADMIN FUNCTIONS (races related)---------\u001B[0m\r\n");
+        writeline("\u001B[30;42m->\"\\start_race <race_id>\"\u001B[0m - starts a race.");
+        writeline("\u001B[30;42m->\"\\add_race <laps>\"\u001B[0m - adds a race.");
+        writeline(
+                "\u001B[30;42m->\"\\add_to_race <race_id> <[all the horses to add separated by spaces]>\"\u001B[0m - to add a list of horses to a race.");
 
-		writeline(client_socket,"\r\n\u001B[30;41m----------ADMIN FUNCTIONS (administration related)---------\u001B[0m\r\n");
-		writeline(client_socket,"\u001B[30;42m->\"\\stop_server\"\u001B[0m - to stop accepting clients and disconnect every one.");
-		writeline(client_socket,"                 - Note: only possible in the server.");
-		writeline(client_socket,"\u001B[30;42m->\"\\start_server\"\u001B[0m - to start taking clients again.");
-		writeline(client_socket,"\u001B[30;42m->\"\\sql_query <query>\"\u001B[0m - to run a query.");
+        writeline("\r\n\u001B[30;41m----------ADMIN FUNCTIONS (administration related)---------\u001B[0m\r\n");
+        writeline("\u001B[30;42m->\"\\stop_server\"\u001B[0m - to stop accepting clients and disconnect every one.");
+        writeline("                 - Note: only possible in the server.");
+        writeline("\u001B[30;42m->\"\\start_server\"\u001B[0m - to start taking clients again.");
+        writeline("\u001B[30;42m->\"\\sql_query <query>\"\u001B[0m - to run a query.");
 	}
 }
 
@@ -759,14 +545,14 @@ bool Client::parse( string ins ) //true always except when "\quit" received.
 	}
 	else if(ins[0]!='\\')
 	{
-		writeline(client_socket,"Commands always have to start with a backslash. Try again.");
+        writeline("Commands always have to start with a backslash. Try again.");
 		return true;
 	}
 	parsed_command command=get_parsed_command(ins);
 	//print_command(command);
 	if(command.cmd=="")
 	{
-		//writeline(client_socket,"Invalid command.");
+        //writeline("Invalid command.");
 		return true;
 	}
 	try
@@ -790,8 +576,17 @@ bool Client::parse( string ins ) //true always except when "\quit" received.
 		else if(command.cmd=="\\add_credits") 			{add_credits(command.args[0].get<int>(),command.args[1].get<double>());}
 		else if(command.cmd=="\\bet") 					{bet(user_id,command.args[0].get<int>(),command.args[1].get<int>(),command.args[2].get<double>());}
 		else if(command.cmd=="\\bet_other") 			{bet(command.args[0].get<int>(),command.args[1].get<int>(),command.args[2].get<int>(),command.args[3].get<double>());}
-		else if(command.cmd=="\\stop_server") 			{if(client_socket==IN_SERVER&&is_admin(user_id)) {if(Network::server().srv_running()) Network::server().shutdown_server(); else writeline(client_socket,"Server is already shut down.");} else writeline(client_socket,"You cannot shutdown the server unless you are logged in as an admin in the server.");}
-		else if(command.cmd=="\\start_server") 			{if(client_socket==IN_SERVER&&is_admin(user_id)) Network::server().start_server();else writeline(client_socket,"You cannot start the server unless you are logged in as an admin in the server.");}
+        else if (command.cmd == "\\stop_server") {
+            if (client_socket == IN_SERVER && is_admin(user_id)) {
+                if (Network::server().srv_running()) Network::server().shutdown_server();
+                else
+                    writeline("Server is already shut down.");
+            } else writeline("You cannot shutdown the server unless you are logged in as an admin in the server.");
+        } else if (command.cmd == "\\start_server") {
+            if (client_socket == IN_SERVER && is_admin(user_id))
+                Network::server().start_server();
+            else writeline("You cannot start the server unless you are logged in as an admin in the server.");
+        }
 		else if(command.cmd=="\\show_users") 			{show_users(command.args[0].get<string>());}
 		else if(command.cmd=="\\show_all_horses")	 	{show_horses(0);}
 		else if(command.cmd=="\\show_some_horses") 		{show_horses(command.args[0].get<int>());}
@@ -801,7 +596,10 @@ bool Client::parse( string ins ) //true always except when "\quit" received.
 		else if(command.cmd=="\\show_race_info")		{show_race_info(command.args[0].get<int>());}
 		else if(command.cmd=="\\show_bets")	 			{show_user_bets(user_id,command.args[0].get<int>());}
 		else if(command.cmd=="\\show_bets_other")	 	{show_user_bets(command.args[0].get<int>(),command.args[1].get<int>());}
-		else if(command.cmd=="\\show_server_ip")		{writeline(client_socket,"Server_IP: " + string(Network::server().get_ip(Network::server().sockfd)) + ":" + Properties::getDefault().getProperty("PORT"));}
+        else if (command.cmd == "\\show_server_ip") {
+            writeline("Server_IP: " + string(Network::server().get_ip(Network::server().sockfd)) + ":" +
+                      Properties::getDefault().getProperty("PORT"));
+        }
 		//else if(command.cmd=="\\")	 					{}
 	}
 	catch(DBMSError& e)
@@ -821,25 +619,25 @@ bool Client::parse( string ins ) //true always except when "\quit" received.
 //			clog(err_msg.str() << "SQL query is NULL.");
 //			return true;
 //		}
-		//Network::server().writeline(client_socket,"An error that wasn't supposed to have happened has occurred. Please contact the admin");
+        //Network::server().writeline("An error that wasn't supposed to have happened has occurred. Please contact the admin");
 		clog(err_msg.str() << "Command: \"" << ins << "\". SQL query error:" << endl << e.what());
 		//PQclear(e.err);
 	}
 	catch(int i)
 	{
-		Network::server().writeline(client_socket,"An error that wasn't supposed to have happened has occurred. Please contact the admin.");
+        writeline("An error that wasn't supposed to have happened has occurred. Please contact the admin.");
 	}
-	/*catch(logic_error e)
-	{
-		Network::server().writeline(client_socket,"An error that wasn't supposed to have happened has occurred. Please contact the admin.");
-		clog("Caught a logic error. What()="+string(e.what()));
-	}*/
+        /*catch(logic_error e)
+        {
+            Network::server().writeline("An error that wasn't supposed to have happened has occurred. Please contact the admin.");
+            clog("Caught a logic error. What()="+string(e.what()));
+        }*/
 	catch(...)
 	{
 		clog("Caught an unknown error while parsing command=\"" << ins << "\" from socket "+to_string(client_socket)+". Exception type: \""+
 																													 Utils::demangle(
 																															 __cxxabiv1::__cxa_current_exception_type()->name())+"\"");
-		Network::server().writeline(client_socket,"An error that wasn't supposed to have happened has occurred. Please contact the admin.");
+        writeline("An error that wasn't supposed to have happened has occurred. Please contact the admin.");
 	}
 	return true;
 }
@@ -869,10 +667,10 @@ Client::Client(int so) : client_socket(so), user_id(LOGGED_OFF)
 	}
 
 	if(client_socket>0)
-		writeline(client_socket, "Welcome to the client. Please login using your credentials.");
+        writeline("Welcome to the client. Please login using your credentials.");
 	else
-		writeline(client_socket, "Welcome to the server. Please login using your admin credentials.");
-	writeline(client_socket, "Type \"\\help\" to quit.");
+        writeline("Welcome to the server. Please login using your admin credentials.");
+    writeline("Type \"\\help\" to quit.");
 
 	//cout << "Socket connected: " << client_socket << endl;
 
@@ -904,22 +702,22 @@ void Client::regist(string login_name , string pass , string name , bool ad , in
 {
 	if(!check_valid(login_name))
 	{
-		writeline(client_socket,"The login_name you inserted contains invalid characters.");
+        writeline("The login_name you inserted contains invalid characters.");
 		return;
 	}
 	if(!check_valid(pass))
 	{
-		writeline(client_socket,"The pass you inserted contains invalid characters.");
+        writeline("The pass you inserted contains invalid characters.");
 		return;
 	}
 	if(!check_valid(name))
 	{
-		writeline(client_socket,"The name you inserted contains invalid characters.");
+        writeline("The name you inserted contains invalid characters.");
 		return;
 	}
 	if(user_id>0 && !is_admin(user_id))
 	{
-		writeline(client_socket,"Please logout before registering.");
+        writeline("Please logout before registering.");
 		return;
 	}
 	transform(login_name.begin(),login_name.end(),login_name.begin(),::tolower); //tolower every char in the string
@@ -935,7 +733,7 @@ void Client::regist(string login_name , string pass , string name , bool ad , in
 	catch(DBMSError& e)
 	{
 		//clog("Error in the query from the \"Client::regist\" function with login_name=\"" << login_name << "\", name=\"" << name << "\", pass=\"" << pass << "\", ad=" << b2s(ad) << " and cr=" << cr);
-		writeline(client_socket,"Error while registering. If the problem persists, please contact the admin.");
+        writeline("Error while registering. If the problem persists, please contact the admin.");
 		//throw(e);
 	}
 	PQclear(res);
@@ -945,17 +743,17 @@ void Client::login(string login_name, string pass)
 {
 	if(user_id!=LOGGED_OFF)	//throw something
 	{
-		writeline(client_socket,"You are already logged in as \"" + username + "\".");
+        writeline("You are already logged in as \"" + username + "\".");
 		return;
 	}
 	if(!check_valid(login_name))
 	{
-		writeline(client_socket,"The login_name you inserted contains invalid characters.");
+        writeline("The login_name you inserted contains invalid characters.");
 		return;
 	}
 	if(!check_valid(pass))
 	{
-		writeline(client_socket,"The pass you inserted contains invalid characters.");
+        writeline("The pass you inserted contains invalid characters.");
 		return;
 	}
 	stringstream query;
@@ -971,14 +769,14 @@ void Client::login(string login_name, string pass)
 	catch(DBMSError& e)	//implement later
 	{
 		//clog(cout << "Unknown error occurred in the query from \"Client::login\" using login_name=\"" << login_name << "\" and pass=\"" << pass << "\"");
-		writeline(client_socket,"There was an error during the login process. If the problem persists, please contact the admin.");
+        writeline("There was an error during the login process. If the problem persists, please contact the admin.");
 		//PQclear(res);
 		throw (e);
 	}
 	if( PQntuples( res )==0 )	//(const PGresult*)
 	{
 		clog("Socket " << client_socket << " tried to login with wrong credentials. login: \"" << login_name << "\" and pass: \"" << pass << "\"." );
-		writeline(client_socket,"ACCESS DENIED!!! Wrong credentials!");
+        writeline("ACCESS DENIED!!! Wrong credentials!");
 		PQclear(res);
 		return;
 	}
@@ -987,7 +785,7 @@ void Client::login(string login_name, string pass)
 
 	if(client_socket==IN_SERVER && !is_admin(user_id))
 	{
-		writeline(client_socket,"ACCESS DENIED!!! You cannot login directly at the server unless you are an admin.");
+        writeline("ACCESS DENIED!!! You cannot login directly at the server unless you are an admin.");
 		clog("User " << user_id << " tried to login at the server. Access denied.");
 		user_id=LOGGED_OFF;
 		PQclear(res);
@@ -1001,8 +799,8 @@ void Client::login(string login_name, string pass)
 	clog("Socket " << client_socket << " logged in as user_id " << user_id << ", username \"" << username << "\"");
 	query.str("");query.clear();
 	query << "ACCESS GRANTED!\r\nWelcome, " << name << " (id=" << user_id << ")!";
-	writeline(client_socket,query.str());
-	writeline(client_socket,"You have "+to_string(get_user_credits(user_id))+" credits.");
+    writeline(query.str());
+    writeline("You have " + to_string(get_user_credits(user_id)) + " credits.");
 	PQclear(res);
 }
 
@@ -1042,7 +840,7 @@ void Client::logout()
 {
 	if(user_id==LOGGED_OFF)
 		return;
-	writeline(client_socket,"You are now logged off!");
+    writeline("You are now logged off!");
 	clog("Socket " << client_socket << " which was logged with user_id=" << user_id << ", username \"" << username << "\" and name \"" << name << "\" has logged off");
 	Network::server().clients[client_socket]=user_id=LOGGED_OFF;
 	name="";
@@ -1068,7 +866,7 @@ bool Client::quit()	//returns true for quitting and false for not quitting (not 
 	{
 		if(!is_admin())	//if not admin or not logged in
 		{
-			writeline(client_socket,"You don't have permissions to close the server.");
+            writeline("You don't have permissions to close the server.");
 			return false;
 		}
 		else
@@ -1083,7 +881,7 @@ int Client::get_user_id(string login_name)
 {	//returns LOGGED_OFF if user doesn't exist
 	if(!check_valid(login_name))
 	{
-		//writeline(client_socket,"The login_name you inserted contains invalid characters.");
+        //writeline("The login_name you inserted contains invalid characters.");
 		return LOGGED_OFF;
 	}
 	stringstream query;
@@ -1116,32 +914,32 @@ void Client::passwd(int id,string old_pass, string new_pass)
 {
 	if(user_id==LOGGED_OFF)	//throw something
 	{
-		writeline(client_socket,"You need to be logged in to be able to change your password.");
+        writeline("You need to be logged in to be able to change your password.");
 		return;
 	}
 	if(id==LOGGED_OFF)
 	{
-		writeline(client_socket,"Error running your command because of the user you inserted.");
+        writeline("Error running your command because of the user you inserted.");
 	}
 	const bool vo=check_valid(old_pass), vn=check_valid(new_pass);	//valid_old, valid_new
 	if(!vo && !vn)
 	{
-		writeline(client_socket,"Both the passwords you inserted have invalid characters.");
+        writeline("Both the passwords you inserted have invalid characters.");
 		return;
 	}
 	else if(!vo)
 	{
-		writeline(client_socket,"The old password you inserted has invalid characters.");
+        writeline("The old password you inserted has invalid characters.");
 		return;
 	}
 	else if(!vn)
 	{
-		writeline(client_socket,"The new password you inserted has invalid characters.");
+        writeline("The new password you inserted has invalid characters.");
 		return;
 	}
 	if(new_pass.size()<6)
 	{
-		writeline(client_socket,"The new password must be at least 6 characters long.");
+        writeline("The new password must be at least 6 characters long.");
 		return;
 	}
 	stringstream query;
@@ -1157,12 +955,12 @@ void Client::passwd(int id,string old_pass, string new_pass)
 	catch(DBMSError& e)
 	{
 		//clog("Query to check old_pass in \"Client::passwd\" glitched. login_name: \"" << username << "\"");
-		writeline(client_socket,"There was a problem with your request. Please contact an admin.");
+        writeline("There was a problem with your request. Please contact an admin.");
 		//throw(e);
 	}
 	if(PQntuples( res )==0)
 	{
-		writeline(client_socket,"Wrong password!");
+        writeline("Wrong password!");
 		PQclear(res);
 		return;
 	}
@@ -1180,10 +978,11 @@ void Client::passwd(int id,string old_pass, string new_pass)
 	catch(DBMSError& e)
 	{
 		//clog("Query to change the pass in \"Client::passwd\" glitched. new_pass: \"" << new_pass << "\"");
-		writeline(client_socket,"There was a problem with your request.\r\nAre you sure your new password doesn't have illegal characters and has the minimal length?\r\nIf the problem persists, please contact an admin.");
+        writeline(
+                "There was a problem with your request.\r\nAre you sure your new password doesn't have illegal characters and has the minimal length?\r\nIf the problem persists, please contact an admin.");
 		//throw(e);
 	}
-	writeline(client_socket,"Successfully changed user_id id's password.");
+    writeline("Successfully changed user_id id's password.");
 	PQclear(res);
 }
 
@@ -1191,14 +990,14 @@ void Client::change_admin(int id, bool ad)
 {
 	if(!is_admin(user_id))
 	{
-		writeline(client_socket,"You can't use this function for you don't have enough permissions.");
+        writeline("You can't use this function for you don't have enough permissions.");
 		return;
 	}
 	if(id==1||id==2||id==3)
 	{
 		if(ad)
 			return;
-		writeline(client_socket,"The originals are ALWAYS admins. Originals are forever! Long live the Originals!");
+        writeline("The originals are ALWAYS admins. Originals are forever! Long live the Originals!");
 		return;
 	}
 	stringstream query;
@@ -1215,7 +1014,7 @@ void Client::change_admin(int id, bool ad)
 	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
-		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+        writeline("Error while running your command. If the problem persists, please contact the admin.");
 		//throw(e);
 	}
 	query.str("");
@@ -1225,7 +1024,7 @@ void Client::change_admin(int id, bool ad)
 		query << "a regular user.";
 	else
 		query << "an admin.";
-	writeline(client_socket,query.str());
+    writeline(query.str());
 	PQclear(res);
 }
 
@@ -1233,7 +1032,7 @@ int Client::get_horse_id(string h_name)
 {
 	if(!check_valid(h_name))
 	{
-		writeline(client_socket,"The horse name you inserted contains invalid characters.");
+        writeline("The horse name you inserted contains invalid characters.");
 		return -1;
 	}
 	stringstream query;
@@ -1266,27 +1065,27 @@ void Client::add_horse(double speed , string h_name)
 {
 	if(!is_admin(user_id))
 	{
-		writeline(client_socket,"You can't use this function for you don't have enough permissions.");
+        writeline("You can't use this function for you don't have enough permissions.");
 		return;
 	}
 	if(!check_valid(h_name))
 	{
-		writeline(client_socket,"Invalid horse name.");
+        writeline("Invalid horse name.");
 		return;
 	}
 	if(speed<=0)
 	{
-		writeline(client_socket,"Speed has to be greater than 0.");
+        writeline("Speed has to be greater than 0.");
 		return;
 	}
 	if(h_name.length()<1 || h_name.length()>15)
 	{
-		writeline(client_socket,"Horse name must have between 1 and 15 characters.");
+        writeline("Horse name must have between 1 and 15 characters.");
 		return;
 	}
 	if(get_horse_id(h_name)>0)
 	{
-		writeline(client_socket,"Horse \""+h_name+"\" already exists.");
+        writeline("Horse \"" + h_name + "\" already exists.");
 		return;
 	}
 	transform(h_name.begin(),h_name.end(),h_name.begin(),::tolower); //tolower every char in the string
@@ -1301,7 +1100,7 @@ void Client::add_horse(double speed , string h_name)
 	}
 	catch(DBMSError& e)
 	{
-		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+        writeline("Error while running your command. If the problem persists, please contact the admin.");
 		//throw(e);
 	}
 	query.str("");
@@ -1313,14 +1112,15 @@ void Client::add_horse(double speed , string h_name)
 	}
 	catch(DBMSError& e)
 	{
-		writeline(client_socket,"Error while running your command after adding horse. If the problem persists, please contact the admin.");
+        writeline(
+                "Error while running your command after adding horse. If the problem persists, please contact the admin.");
 		//throw(e);
 	}
 	int h_i=atoi(PQgetvalue(res,0,0));
 	query.str("");
 	query.clear();
 	query << "Horse added with horse_id=" << h_i << endl;
-	writeline(client_socket,query.str());
+    writeline(query.str());
 	query.str("");
 	query.clear();
 	query << "User " << user_id << " added horse \"" << h_name << "\" with speed=" << speed << " and horse_id=" << h_i << endl;
@@ -1334,12 +1134,12 @@ void Client::add_to_race(int race,vector<int> horses)
 	if(!check_race(race))
 	{
 		query << "Race " << race << " does not exist.";
-		writeline(client_socket,query.str());
+        writeline(query.str());
 		return;
 	}
 	if(!is_admin(user_id))
 	{
-		writeline(client_socket,"You need to be logged as an admin to do this.");
+        writeline("You need to be logged as an admin to do this.");
 		return;
 	}
 	if(horses.size()==0)
@@ -1352,7 +1152,8 @@ void Client::add_to_race(int race,vector<int> horses)
 	{
 		if(get_num_horses_on_race(race)>=MAX_HORSES_ON_RACE)
 		{
-			writeline(client_socket,"Couldn't add all of the horses indicated because the race is full (max is " +to_string(MAX_HORSES_ON_RACE)+ " horses per race.");
+            writeline("Couldn't add all of the horses indicated because the race is full (max is " +
+                      to_string(MAX_HORSES_ON_RACE) + " horses per race.");
 			return;
 		}
 		query.str("");
@@ -1360,13 +1161,13 @@ void Client::add_to_race(int race,vector<int> horses)
 		if(!check_horse(*it))
 		{
 			query << "Horse with id=" << *it << " does not exist." << endl;
-			writeline(client_socket,query.str());
+            writeline(query.str());
 			continue;
 		}
 		if(check_horse_in_race(*it,race))
 		{
 			query << "Horse " << *it << " already is in race " << race << ".";
-			writeline(client_socket,query.str());
+            writeline(query.str());
 			continue;
 		}
 		state=(double)rand()/RAND_MAX/2+0.5;	//random number between [0.5;1[
@@ -1379,7 +1180,7 @@ void Client::add_to_race(int race,vector<int> horses)
 		}
 		catch(DBMSError& e)
 		{
-			writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+            writeline("Error while running your command. If the problem persists, please contact the admin.");
 			//throw(e);
 		}
 		PQclear(res);
@@ -1390,12 +1191,12 @@ void Client::add_race(int laps)
 {
 	if(!is_admin(user_id))
 	{
-		writeline(client_socket,"Only admins can do this.");
+        writeline("Only admins can do this.");
 		return;
 	}
 	if(laps<=0)
 	{
-		writeline(client_socket,"Number of laps must be greater than zero.");
+        writeline("Number of laps must be greater than zero.");
 		return;
 	}
 	PGresult* res;
@@ -1409,7 +1210,7 @@ void Client::add_race(int laps)
 	}
 	catch(DBMSError& e)
 	{
-		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+        writeline("Error while running your command. If the problem persists, please contact the admin.");
 		//throw(e);
 	}
 	PQclear(res);
@@ -1424,12 +1225,12 @@ void Client::add_race(int laps)
 	}
 	catch(DBMSError& e)
 	{
-		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+        writeline("Error while running your command. If the problem persists, please contact the admin.");
 		//throw(e);
 	}
 	int r_i=stoi(PQgetvalue(res,0,0));
 	PQclear(res);
-	writeline(client_socket,"Added race " + to_string(r_i) + ".");
+    writeline("Added race " + to_string(r_i) + ".");
 }
 
 bool Client::check_race(int r_i)
@@ -1691,18 +1492,18 @@ void Client::watch_race(int r_i)
 {
 	if(!check_race(r_i))
 	{
-		writeline(client_socket,"Invalid race.");
+        writeline("Invalid race.");
 		return;
 	}
 	auto temp=races.find(r_i);
 	if(temp==races.end())
 	{
-		writeline(client_socket,"Race not active.");
+        writeline("Race not active.");
 		return;
 	}
 	if(temp->second->sockets_watching.find(client_socket)!=temp->second->sockets_watching.end())
 	{
-		writeline(client_socket,"Client already watching the race.");
+        writeline("Client already watching the race.");
 	}
 	clear();
 	string dummy;
@@ -1719,12 +1520,12 @@ void Client::add_credits(int u_i, double cr)
 {
 	if(!is_admin(user_id))
 	{
-		writeline(client_socket,"You need to be logged as an admin to do this.");
+        writeline("You need to be logged as an admin to do this.");
 		return;
 	}
 	if(get_user_credits(u_i)+cr<0)
 	{
-		writeline(client_socket,"This transaction would make the credits negative. Transaction denied.");
+        writeline("This transaction would make the credits negative. Transaction denied.");
 		return;
 	}
 	stringstream query;
@@ -1741,7 +1542,7 @@ void Client::add_credits(int u_i, double cr)
 	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
-		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+        writeline("Error while running your command. If the problem persists, please contact the admin.");
 		//throw(e);
 	}
 	PQclear(res);
@@ -1783,37 +1584,37 @@ void Client::bet(int u_i,int h_i,int r_i,double cr)
 {
 	if(user_id<=0)
 	{
-		writeline(client_socket,"You need to be logged in to be able to bet.");
+        writeline("You need to be logged in to be able to bet.");
 		return;
 	}
 	if(!check_user(u_i))
 	{
-		writeline(client_socket,"Invalid user_id.");
+        writeline("Invalid user_id.");
 		return;
 	}
 	if(!check_horse(h_i))
 	{
-		writeline(client_socket,"Invalid horse_id.");
+        writeline("Invalid horse_id.");
 		return;
 	}
 	if(!check_race(r_i))
 	{
-		writeline(client_socket,"Invalid race_id.");
+        writeline("Invalid race_id.");
 		return;
 	}
 	if(check_race_started(r_i))
 	{
-		writeline(client_socket,"You can't change or add bets on a race that has already started.");
+        writeline("You can't change or add bets on a race that has already started.");
 		return;
 	}
 	if(cr<0)
 	{
-		writeline(client_socket,"The bet ammount has to be >0 or =0 to delete the bet.");
+        writeline("The bet ammount has to be >0 or =0 to delete the bet.");
 		return;
 	}
 	if(user_id!=u_i&&!is_admin(user_id))	//betting for other people is only available to admins
 	{
-		writeline(client_socket,"You can't bet for other people unless you are an admin.");
+        writeline("You can't bet for other people unless you are an admin.");
 		return;
 	}
 	stringstream query;
@@ -1840,18 +1641,20 @@ void Client::bet(int u_i,int h_i,int r_i,double cr)
 			catch(DBMSError& e)
 			{
 				//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
-				writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+                writeline("Error while running your command. If the problem persists, please contact the admin.");
 				//throw(e);
 			}
 			if(u_i==user_id)
-				writeline(client_socket,"Your bet on race_id=" + to_string(r_i) + " and on horse_id=" + to_string(h_i) + " was deleted.");
+                writeline("Your bet on race_id=" + to_string(r_i) + " and on horse_id=" + to_string(h_i) +
+                          " was deleted.");
 			else
-				writeline(client_socket,"User " + to_string(u_i) + "'s bet on race_id=" + to_string(r_i) + " and on horse_id=" + to_string(h_i) + " was deleted.");
+                writeline("User " + to_string(u_i) + "'s bet on race_id=" + to_string(r_i) + " and on horse_id=" +
+                          to_string(h_i) + " was deleted.");
 			return;
 		}
 		if(cr>get_user_credits(user_id)+previous_bet)
 		{
-			writeline(client_socket,"You can't bet credits that you don't have. Get to an admin if you want more credits.");
+            writeline("You can't bet credits that you don't have. Get to an admin if you want more credits.");
 			return;
 		}
         //change credits
@@ -1877,13 +1680,15 @@ void Client::bet(int u_i,int h_i,int r_i,double cr)
 		catch(DBMSError& e)
 		{
 			//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
-			writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+            writeline("Error while running your command. If the problem persists, please contact the admin.");
 			//throw(e);
 		}
 		if(u_i==user_id)
-			writeline(client_socket,"You had already bet in this race and horse so your previous bet was successfuly replaced by this new one.");
+            writeline(
+                    "You had already bet in this race and horse so your previous bet was successfuly replaced by this new one.");
 		else
-			writeline(client_socket,"User " + to_string(u_i) + " had already bet in this race and horse so your previous bet was successfuly replaced by this new one.");
+            writeline("User " + to_string(u_i) +
+                      " had already bet in this race and horse so your previous bet was successfuly replaced by this new one.");
 		PQclear(res);
 		return;
 	}
@@ -1891,12 +1696,12 @@ void Client::bet(int u_i,int h_i,int r_i,double cr)
 	{
 		if(cr==0)
 		{
-			writeline(client_socket,"You can't bet 0 credits.");
+            writeline("You can't bet 0 credits.");
 			return;
 		}
 		if(cr>get_user_credits(user_id))
 		{
-			writeline(client_socket,"You can't bet credits that you don't have. Get to an admin if you want more credits.");
+            writeline("You can't bet credits that you don't have. Get to an admin if you want more credits.");
 			return;
 		}
 		query << "BEGIN;" << endl;
@@ -1914,10 +1719,10 @@ void Client::bet(int u_i,int h_i,int r_i,double cr)
 		}
 		catch(DBMSError& e)
 		{
-			writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+            writeline("Error while running your command. If the problem persists, please contact the admin.");
 			//throw(e);
 		}
-		writeline(client_socket,"Bet successfuly added to the system.");
+        writeline("Bet successfuly added to the system.");
 		PQclear(res);
 		return;
 	}
@@ -1927,49 +1732,50 @@ void Client::start_race(int r_i)
 {
 	if(!is_admin(user_id))
 	{
-		writeline(client_socket,"Command only available for admins.");
+        writeline("Command only available for admins.");
 		return;
 	}
 	if(!check_race(r_i))
 	{
-		writeline(client_socket,"Invalid race_id.");
+        writeline("Invalid race_id.");
 		return;
 	}
 	if(races.find(r_i)!=races.end())
 	{
-		writeline(client_socket,"Race already active.");
+        writeline("Race already active.");
 		return;
 	}
 	if(get_race_started(r_i))
 	{
-		writeline(client_socket,"Race already started once.");
+        writeline("Race already started once.");
 		return;
 	}
 	if(get_num_horses_on_race(r_i)<MIN_HORSES_ON_RACE)
 	{
-		writeline(client_socket,"Race doesn't have enough participants yet.");
+        writeline("Race doesn't have enough participants yet.");
 		return;
 	}
 	int h=check_all_horses_available(r_i);
 	if(h>0)
 	{
-		writeline(client_socket,"At least the horse "+to_string(h)+" is already in another active race.");
+        writeline("At least the horse " + to_string(h) + " is already in another active race.");
 		return;
 	}
 	races.insert( pair<int,class Race*>(r_i,new Race(r_i,get_race_laps(r_i))) );
-	writeline(client_socket,"Race started.");
+    writeline("Race started.");
 }
 
 void Client::show_races(string flag)
 {
 	if(user_id<=0)
 	{
-		writeline(client_socket,"You need to login to be able to use this command.");
+        writeline("You need to login to be able to use this command.");
 		return;
 	}
 	if(flag!="all"&&flag!="active")
 	{
-		writeline(client_socket,"Invalid flag. Use \"all\" for seeing all of the races and \"active\" to see only the races active at the moment.");
+        writeline(
+                "Invalid flag. Use \"all\" for seeing all of the races and \"active\" to see only the races active at the moment.");
 		return;
 	}
 	if(flag=="all")
@@ -1985,7 +1791,7 @@ void Client::show_races(string flag)
 		catch(DBMSError& e)
 		{
 			//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
-			writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+            writeline("Error while running your command. If the problem persists, please contact the admin.");
 			//throw(e);
 		}
 		S.printResult(res,client_socket);
@@ -1994,39 +1800,39 @@ void Client::show_races(string flag)
 	}
 	if(races.size()==0)
 	{
-		writeline(client_socket,"There are no active races at the moment.");
+        writeline("There are no active races at the moment.");
 		return;
 	}
-	writeline(client_socket,"These are the active races:");
+    writeline("These are the active races:");
 	for(auto& it:races)
 	{
-		writeline(client_socket,"race_id="+to_string(it.first)+" | #horses="+to_string(it.second->horses.size()));
+        writeline("race_id=" + to_string(it.first) + " | #horses=" + to_string(it.second->horses.size()));
 	}
-	writeline(client_socket,"To go watch any of these races, use the command \"watch_race <race_id>\".");
+    writeline("To go watch any of these races, use the command \"watch_race <race_id>\".");
 }
 
 void Client::show_race_info(int r_i)
 {
 	if(user_id<=0)
 	{
-		writeline(client_socket,"You need to login to be able to use this command.");
+        writeline("You need to login to be able to use this command.");
 		return;
 	}
 	if(!check_race(r_i))
 	{
-		writeline(client_socket,"Invalid race_id.");
+        writeline("Invalid race_id.");
 		return;
 	}
-	writeline(client_socket,"#horses="+to_string(get_num_horses_on_race(r_i)));
-	writeline(client_socket,"Laps="+to_string(get_race_laps(r_i)));
-	writeline(client_socket,"Time created="+get_race_date(r_i));
-	writeline(client_socket,"Started="+Utils::b2s(get_race_started(r_i)));
+    writeline("#horses=" + to_string(get_num_horses_on_race(r_i)));
+    writeline("Laps=" + to_string(get_race_laps(r_i)));
+    writeline("Time created=" + get_race_date(r_i));
+    writeline("Started=" + Utils::b2s(get_race_started(r_i)));
 	auto temp=races.find(r_i);
     bool temp_b = temp != races.end();
-	writeline(client_socket,"Active now="+Utils::b2s(temp_b));
+    writeline("Active now=" + Utils::b2s(temp_b));
 	if(temp_b)
-		writeline(client_socket,"Finished="+Utils::b2s(temp->second->finished));
-	writeline(client_socket,"\r\nHorses on race:\r\n");
+        writeline("Finished=" + Utils::b2s(temp->second->finished));
+    writeline("\r\nHorses on race:\r\n");
 	show_horses_on_race(r_i);
 }
 
@@ -2094,7 +1900,7 @@ void Client::show_horses(int n)
 {
 	if(user_id<=0)
 	{
-		writeline(client_socket,"You need to login to use this command.");
+        writeline("You need to login to use this command.");
 		return;
 	}
 	stringstream query;
@@ -2110,7 +1916,7 @@ void Client::show_horses(int n)
 	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
-		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+        writeline("Error while running your command. If the problem persists, please contact the admin.");
 		//throw(e);
 	}
 	S.printResult(res,client_socket);
@@ -2121,17 +1927,17 @@ void Client::show_user_bets(int u_i,int lim)
 {
 	if(user_id<=0)
 	{
-		writeline(client_socket,"You need to login to use this command.");
+        writeline("You need to login to use this command.");
 		return;
 	}
 	if(!is_admin(user_id))
 	{
-		writeline(client_socket,"You can't see other people's bets");
+        writeline("You can't see other people's bets");
 		return;
 	}
 	if(!check_user(u_i))
 	{
-		writeline(client_socket,"User " + to_string(u_i) + " doesn't exist.");
+        writeline("User " + to_string(u_i) + " doesn't exist.");
 		return;
 	}
 	stringstream query;
@@ -2149,7 +1955,7 @@ void Client::show_user_bets(int u_i,int lim)
 	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
-		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+        writeline("Error while running your command. If the problem persists, please contact the admin.");
 		//throw(e);
 	}
 	S.printResult(res,client_socket);
@@ -2160,12 +1966,13 @@ void Client::show_users(string opt)
 {
 	if(!is_admin(user_id))
 	{
-		writeline(client_socket,"You need to login as an admin to use this command.");
+        writeline("You need to login as an admin to use this command.");
 		return;
 	}
 	if(opt!="l"&&opt!="a")
 	{
-		writeline(client_socket,"Invalid option. Option \"l\" to show only logged in users and \"a\" to show every user on the system.");
+        writeline(
+                "Invalid option. Option \"l\" to show only logged in users and \"a\" to show every user on the system.");
 		return;
 	}
 	stringstream query;
@@ -2183,7 +1990,7 @@ void Client::show_users(string opt)
 		catch(DBMSError& e)
 		{
 			//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
-			writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+            writeline("Error while running your command. If the problem persists, please contact the admin.");
 			//throw(e);
 		}
 		S.printResult(res,client_socket);
@@ -2203,7 +2010,7 @@ void Client::show_users(string opt)
 	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
-		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+        writeline("Error while running your command. If the problem persists, please contact the admin.");
 		//throw(e);
 	}
 	query.str("");query.clear();
@@ -2224,7 +2031,7 @@ void Client::show_users(string opt)
 			catch(DBMSError& e)
 			{
 				//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
-				writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+                writeline("Error while running your command. If the problem persists, please contact the admin.");
 				//throw(e);
 			}
 			PQclear(res);
@@ -2242,7 +2049,7 @@ void Client::show_users(string opt)
 	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
-		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+        writeline("Error while running your command. If the problem persists, please contact the admin.");
 		//throw(e);
 	}
 	query.str("");query.clear();
@@ -2257,7 +2064,7 @@ void Client::show_users(string opt)
 	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
-		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+        writeline("Error while running your command. If the problem persists, please contact the admin.");
 		//throw(e);
 	}
 	PQclear(res);
@@ -2267,12 +2074,12 @@ void Client::show_horses_on_race(int r_i)
 {
 	if(user_id<=0)
 	{
-		writeline(client_socket,"Log in to use this command.");
+        writeline("Log in to use this command.");
 		return;
 	}
 	if(!check_race(r_i))
 	{
-		writeline(client_socket,"Invalid race_id.");
+        writeline("Invalid race_id.");
 		return;
 	}
 	stringstream query;
@@ -2288,7 +2095,7 @@ void Client::show_horses_on_race(int r_i)
 	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
-		writeline(client_socket,"Error while running your command. If the problem persists, please contact the admin.");
+        writeline("Error while running your command. If the problem persists, please contact the admin.");
 		//throw(e);
 	}
 	S.printResult(res,client_socket);
@@ -2299,7 +2106,7 @@ void Client::sql_query(string q)
 {
 	if(!is_admin(user_id))
 	{
-		writeline(client_socket,"Only admins can issue this command.");
+        writeline("Only admins can issue this command.");
 		return;
 	}
 	if(q=="")
@@ -2312,7 +2119,7 @@ void Client::sql_query(string q)
 	catch(DBMSError& e)
 	{
 		//clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
-		writeline(client_socket,"The query entered originated the following error message:.\r\n"+string(e.what()));
+        writeline("The query entered originated the following error message:.\r\n" + string(e.what()));
 		clog("User " << user_id << " used the \"sql_query\" command and originated an error. Query inserted:" << endl << q << endl << endl << "Error message:" << endl << PQresultErrorMessage(res));
 		return;
 	}
@@ -2321,9 +2128,12 @@ void Client::sql_query(string q)
 	PQclear(res);
 }
 
-void Client::writeline(int socketfd, string line,bool paragraph) const
-{
+void Client::writeline(int socketfd, string line, bool paragraph) {
 	Network::server().writeline(socketfd,line,paragraph);
+}
+
+void Client::writeline(std::string line, bool paragraph) const {
+    Network::server().writeline(client_socket, line, paragraph);
 }
 
 using namespace std;
@@ -2354,20 +2164,6 @@ bool arg::isEmpty() const {
 
 bool arg::isOfType(const type_info& t) const {
 	return t == this->data.type();
-}
-
-//template arg::get<int>();
-//template arg::get<bool>();
-//template arg::get<double>();
-//template arg::get<string>();
-//template arg::get<vector<int>>();
-
-//https://en.wikipedia.org/wiki/ANSI_escape_code#CSI_codes	//http://www.termsys.demon.co.uk/vtansi.htm
-
-ClientError::ClientError(const std::string & s) : whatMessage(s) {}
-
-const char* ClientError::what() const throw() {
-	return whatMessage.c_str();
 }
 
 bool check_horse_in_race(int h_i, int r_i)

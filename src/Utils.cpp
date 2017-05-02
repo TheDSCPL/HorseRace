@@ -1,11 +1,13 @@
-#include "../headers/Utils.hpp"
-#include "../headers/DBMS.hpp"
+#include <cctype>
 #include <algorithm>
 #include <cxxabi.h>
-#include <cctype>
 #include <stdexcept>
 #include <iostream>
 #include <set>
+#include <chrono>
+#include <thread>
+#include "../headers/Utils.hpp"
+#include "../headers/DBMS.hpp"
 
 using namespace std;
 
@@ -193,10 +195,16 @@ template std::vector<string *> Utils::copyDynamicVector(const std::vector<string
 
 template std::vector<Tuple *> Utils::copyDynamicVector(const std::vector<Tuple *> &);
 
+//https://en.wikipedia.org/wiki/ANSI_escape_code#CSI_codes	//http://www.termsys.demon.co.uk/vtansi.htm
+
 std::string Utils::makeHeader(const std::string & s) {
     return "\r\n\u001B[30;41m----------" + s + "---------\u001B[0m\r\n";
 }
 
 std::string Utils::makeCommandDescription(const std::string & methodName, const std::string & description) {
     return "\u001B[30;42m->\"" + methodName + "\"\u001B[0m - " + description;
+}
+
+std::string Utils::makeCommandDescriptionNote(const std::string &note) {
+    return string("\t\t") + "Note: " + note;
 }
