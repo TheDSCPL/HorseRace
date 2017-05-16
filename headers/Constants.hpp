@@ -50,6 +50,8 @@ namespace SQLPreparedStatementsNames {
     //horse_id, race_id
     const static std::string checkHorseOnRace = "CHECK_HORSE_ON_RACE";
     //
+    const static std::string getLatestHorseId = "GET_LATEST_HORSE_ID";
+    //
     const static std::string getLatestRaceId = "GET_LATEST_RACE_ID";
     //race_id
     const static std::string checkRaceExists = "CHECK_RACE_EXISTS";

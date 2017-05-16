@@ -118,9 +118,9 @@ public:
 
     int getSocketId() const;
 
-    int getInt(const std::string &msg) const;
+    int getInt(const std::string &msg, bool positive = false) const;
 
-    double getDouble(const std::string &msg) const;
+    double getDouble(const std::string &msg, bool positive = false) const;
 
     bool getBool(const std::string &msg) const;
 
@@ -138,6 +138,10 @@ public:
 
     const Connection &operator<<(const int &i) const {
         return *this << std::to_string(i);
+    }
+
+    const Connection &operator<<(const double &d) const {
+        return *this << std::to_string(d);
     }
 
     const Connection &operator<<(const bool &b) const {

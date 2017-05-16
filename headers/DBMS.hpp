@@ -47,7 +47,6 @@ class SQLResultTable {
 
     static std::vector<Tuple*> getTuplesFromPGresult(const PGresult *);
     static std::vector<std::string> getColumnNamesFromPGresult(const PGresult *);
-	static std::string getPrintedTable(const PGresult *);
 public:
     SQLResultTable(SQLResultTable const&);
     ~SQLResultTable();
@@ -61,6 +60,8 @@ public:
 	bool isEmpty() const;
 
     void print(std::ostream &out) const;
+
+	static std::string getPrintedTable(const PGresult *);
 
     operator const char *() const {
         return printedTable.c_str();

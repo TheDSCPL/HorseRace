@@ -208,6 +208,10 @@ std::string Utils::makeHeader(const std::string & s) {
     return "\r\n\u001B[30;41m----------" + s + "---------\u001B[0m\r\n";
 }
 
+std::string Utils::makeSubtitle(const std::string &s) {
+    return "\u001B[30;42m" + s + "\u001B[0m";
+}
+
 std::string Utils::makeCommandDescription(const std::string & methodName, const std::string & description) {
     return "\u001B[30;42m->\"" + methodName + "\"\u001B[0m - " + description;
 }

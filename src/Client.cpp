@@ -89,7 +89,7 @@ void Client::initPreparedStatements() {
 	//laps
 	if (!S.getPreparedStatement(insertRace)) {
 		stringstream query;
-		query << "INSERT INTO races VALUES ($1,DEFAULT,DEFAULT,DEFAULT);" << endl;
+        query << "INSERT INTO races VALUES (DEFAULT,$1,DEFAULT,DEFAULT);" << endl;
 		S.requestNewPreparedStatement(insertRace, query.str());
 	}
 	//horse_id, race_id
@@ -100,6 +100,13 @@ void Client::initPreparedStatements() {
 		query << "WHERE horse_id=$1 AND race_id=$2";
 		S.requestNewPreparedStatement(checkHorseOnRace, query.str());
 	}
+    //
+    if (!S.getPreparedStatement(getLatestHorseId)) {
+        stringstream query;
+        query << "SELECT MAX(horse_id)" << endl;
+        query << "FROM horses;" << endl;
+        S.requestNewPreparedStatement(getLatestHorseId, query.str());
+    }
 	//
 	if (!S.getPreparedStatement(getLatestRaceId)) {
 		stringstream query;

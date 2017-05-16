@@ -106,7 +106,8 @@ void LoggedOut::login() {
             clientContainer.username = login_name;
             clientContainer.changeUserType(
                     table[0]->getBool(2) ? ClientType::ADMIN_CLIENT : ClientType::REGULAR_CLIENT);
-            clientContainer << Connection::GOTO_BEGIN << "Welcome, " << clientContainer.name << "!" << Connection::endl;
+            clientContainer << Connection::GOTO_BEGIN << Utils::makeSubtitle("Welcome, " + clientContainer.name + "!")
+                            << Connection::endl;
         }
     } catch (DBMSErrorRunningPreparedStatement &err) {
         clog((string) "Error in the register method: " + err.what());
@@ -120,13 +121,47 @@ void LoggedOut::login() {
 
 LoggedIn::LoggedIn(ClientContainer &clientContainer) : PrivilegeGroup("Normal user options", clientContainer) {
 
+    Command *_showUserCredits = new Command("ShowUserCredits", "Show how many credits the user has got", {},
+                                            [this]() { const_cast<LoggedIn *>(this)->showUserCredits(); });
+    commands.push_back(_showUserCredits);
+
     Command *_watch_race = new Command("watch_race", "start watching a race", {},
                                        [this]() { const_cast<LoggedIn *>(this)->watch_race(); });
     commands.push_back(_watch_race);
 
+    Command *_show_horses = new Command("ShowHorses", "start watching a race", {"if the max is 0, show all horses"},
+                                        [this]() { const_cast<LoggedIn *>(this)->show_horses(); });
+    commands.push_back(_show_horses);
+
     Command *_logout = new Command("logout", "logs off the user", {},
                                    [this]() { const_cast<LoggedIn *>(this)->logout(); });
     commands.push_back(_logout);
+
+    //FROM RACES_MANAGEMENT
+
+    Command *_showAllRaces = new Command("ShowRaces", "Show all races", {},
+                                         [this, &clientContainer]() {
+                                             RacesManagement::showAllRaces(clientContainer);
+                                         });
+    commands.push_back(_showAllRaces);
+
+    Command *_showActiveRaces = new Command("ShowActiveRaces", "show races happening now", {},
+                                            [this, &clientContainer]() {
+                                                RacesManagement::showActiveRaces(clientContainer);
+                                            });
+    commands.push_back(_showActiveRaces);
+
+    Command *_showRaceInfo = new Command("ShowRaceInfo", "Shows information about a race", {},
+                                         [this, &clientContainer]() {
+                                             RacesManagement::showRaceInfo(clientContainer);
+                                         });
+    commands.push_back(_showRaceInfo);
+
+    Command *_showHorsesOnRace = new Command("ShowHorsesOnRace", "shows all horses in a race", {},
+                                             [this, &clientContainer]() {
+                                                 RacesManagement::showHorsesOnRace(clientContainer);
+                                             });
+    commands.push_back(_showHorsesOnRace);
 
 }
 
@@ -153,6 +188,20 @@ void LoggedIn::watch_race() {
     temp->second->sockets_watching.erase(clientContainer.getSocketId());
     usleep(100);
     clientContainer.clear();
+}
+
+void LoggedIn::show_horses() const {
+    unsigned int n = (unsigned int) clientContainer.getInt("Max number of horses to show (max = 0 -> max = 5)", true);
+    clientContainer << HorsesManagement::show_horses(n);
+}
+
+void LoggedIn::showMyUserID() const {
+    clientContainer << "Your user id is " << clientContainer.user_id << Connection::endl;
+}
+
+void LoggedIn::showUserCredits() const {
+    double cr = UsersManagement::get_user_credits(UsersManagement::get_user_id(clientContainer.username));
+    clientContainer << "User \"" << clientContainer.username << "\" has " << cr << " credits" << Connection::endl;
 }
 
 void LoggedIn::logout() {
@@ -208,6 +257,10 @@ UsersManagement::UsersManagement(ClientContainer &clientContainer) : PrivilegeGr
                                     [this]() { const_cast<UsersManagement *>(this)->isAdmin(); });
     commands.push_back(_isAdmin);
 
+    Command *_showUserCredits = new Command("ShowUserCredits", "Show how many credits a user has got", {},
+                                            [this]() { const_cast<UsersManagement *>(this)->showUserCredits(); });
+    commands.push_back(_showUserCredits);
+
     vector<string> _change_admin_notes;
     if (clientContainer.isInServer())
         _change_admin_notes.push_back("lpcsd can never stop being the admin! he's all powerful");
@@ -249,7 +302,7 @@ int UsersManagement::get_user_id(std::string login_name) {
             return table[0]->getInt(0);
         }
     } catch (DBMSErrorRunningPreparedStatement &err) {
-        clog((string) "Error in the register method: " + err.what());
+        clog((string) "Error in the get_user_id method: " + err.what());
         throw ClientError();
     }
 }
@@ -341,6 +394,34 @@ void UsersManagement::isAdmin() const {
     }
 }
 
+void UsersManagement::showUserCredits() const {
+    string username = clientContainer.getString("Username");
+    double cr = UsersManagement::get_user_credits(UsersManagement::get_user_id(username));
+    clientContainer << "User \"" << username << "\" has " << cr << " credits" << Connection::endl;
+}
+
+double UsersManagement::get_user_credits(int ui) {
+    using namespace SQLPreparedStatementsNames;
+
+    try {
+        const PreparedStatement *ps = S.getPreparedStatement(getUserCredits);
+        if (!ps)
+            throw ClientError("Something went wrong!");
+        SQLResult res = ps->run({to_string(ui)});
+        if (!res || res.hasError() || !res.hasTableResult()) {
+            throw ClientError("Error while running the command: " + res.getErrorMessage());
+        }
+        const SQLResultTable &table = res.getResultTable();
+        if (!table.getNumberOfTuples()) {
+            throw ClientMessage("Error: The inserted username doesn't exist!");
+        }
+        return table[0]->getDouble(0);
+    } catch (DBMSErrorRunningPreparedStatement &err) {
+        clog((string) "Error in the is_admin method: " + err.what());
+        throw ClientError("Something went wrong!");
+    }
+}
+
 void UsersManagement::change_admin(int id, bool ad) {
     using namespace SQLPreparedStatementsNames;
 
@@ -429,7 +510,85 @@ bool UsersManagement::check_user(int u_i) {
 
 //---------------------------HorsesManagement---------------------------//
 
-//HorsesManagement::HorsesManagement(ClientContainer& clientContainer) : PrivilegeGroup(clientContainer) {}
+HorsesManagement::HorsesManagement(ClientContainer &clientContainer) : PrivilegeGroup("Horses Management",
+                                                                                      clientContainer) {
+    Command *_add_horse = new Command("AddHorse", "Adds a horse to the system", {},
+                                      [this]() { const_cast<HorsesManagement *>(this)->add_horse(); });
+    commands.push_back(_add_horse);
+}
+
+void HorsesManagement::add_horse() const {
+    string horseName = clientContainer.getString("Horse's name");
+    double speed = clientContainer.getDouble("Horse's speed", true);
+
+    add_horse(speed, horseName);
+}
+
+void HorsesManagement::add_horse(double speed, std::string h_name) const {
+    if (speed <= 0) {
+        clientContainer << "Error: Speed has to be greater than 0." << Connection::endl;
+        return;
+    }
+    if (h_name.length() < 1 || h_name.length() > 15) {
+        clientContainer << "Error: Horse name must have between 1 and 15 characters." << Connection::endl;
+        return;
+    }
+    transform(h_name.begin(), h_name.end(), h_name.begin(), ::tolower); //tolower every char in the string
+    if (get_horse_id(h_name) > 0) {
+        clientContainer << "Error: Horse \"" << h_name << "\" already exists." << Connection::endl;
+        return;
+    }
+    using namespace SQLPreparedStatementsNames;
+
+    try {
+        {
+            const PreparedStatement *ps = S.getPreparedStatement(insertHorse);
+            if (!ps)
+                throw ClientError("Something went wrong!");
+            SQLResult res = ps->run({h_name, to_string(speed)});
+            if (!res || res.hasError()) {
+                throw ClientError("Error while running the command: " + res.getErrorMessage());
+            }
+        }
+        {
+            const PreparedStatement *ps = S.getPreparedStatement(getLatestHorseId);
+            if (!ps)
+                throw ClientError("Something went wrong!");
+            SQLResult res = ps->run({});
+            if (!res || res.hasError() || !res.hasTableResult() || !res.getResultTable().getNumberOfTuples()) {
+                throw ClientError("Error while running the command: " + res.getErrorMessage());
+            }
+            throw ClientMessage(string("Added horse with id ") + res.getResultTable()[0]->getInt(0));
+        }
+
+    } catch (DBMSErrorRunningPreparedStatement &err) {
+        clog((string) "Error in the change_admin method: " + err.what());
+        throw ClientError("Something went wrong!");
+    }
+}
+
+int HorsesManagement::get_horse_id(std::string h_name) {
+    using namespace SQLPreparedStatementsNames;
+    const PreparedStatement *ps = S.getPreparedStatement(getHorseId);
+    ClientError::throwIf(!ps);
+    try {
+        transform(h_name.begin(), h_name.end(), h_name.begin(), ::tolower);
+        SQLResult res = ps->run({h_name});
+        ClientError::throwIf(
+                res.hasError() || !res.hasTableResult(),
+                "Error while running the command: " + res.getErrorMessage()
+        );
+        const SQLResultTable &table = res.getResultTable();
+        if (!table.getNumberOfTuples()) {
+            return Constants::LOGGED_OFF;
+        } else {
+            return table[0]->getInt(0);
+        }
+    } catch (DBMSErrorRunningPreparedStatement &err) {
+        clog((string) "Error in the get_horse_id method: " + err.what());
+        throw ClientError();
+    }
+}
 
 bool HorsesManagement::check_horse(int h_i) {
     using namespace SQLPreparedStatementsNames;
@@ -453,6 +612,26 @@ bool HorsesManagement::check_horse(int h_i) {
     }
 }
 
+std::string HorsesManagement::show_horses(unsigned int n) {
+    using namespace SQLPreparedStatementsNames;
+
+    const PreparedStatement *ps = S.getPreparedStatement(getHorseRanks);
+    ClientError::throwIf(!ps);
+    try {
+        SQLResult res = ps->run({to_string(n)});
+        ClientError::throwIf(
+                res.hasError() || !res.hasTableResult(),
+                "Error while running the command: " + res.getErrorMessage()
+        );
+        stringstream temp;
+        res.getResultTable().print(temp);
+        throw ClientMessage(temp.str());
+    } catch (DBMSErrorRunningPreparedStatement &err) {
+        clog((string) "Error in the check_horse_in_race method: " + err.what());
+        throw ClientError();
+    }
+}
+
 //---------------------------RacesManagement---------------------------//
 
 RacesManagement::RacesManagement(ClientContainer &clientContainer) : PrivilegeGroup("Races management",
@@ -460,6 +639,15 @@ RacesManagement::RacesManagement(ClientContainer &clientContainer) : PrivilegeGr
     Command *_createRace = new Command("CreateRace", "creates a new race", {},
                                        [this]() { const_cast<RacesManagement *>(this)->add_race(); });
     commands.push_back(_createRace);
+
+    Command *_add_to_race = new Command("AddToRace", "adds horses to a race", {},
+                                        [this]() { const_cast<RacesManagement *>(this)->add_to_race(); });
+    commands.push_back(_add_to_race);
+
+    //notes
+    Command *_start_race = new Command("StartRace", "Starts race", {},
+                                       [this]() { const_cast<RacesManagement *>(this)->start_race(); });
+    commands.push_back(_start_race);
 }
 
 void RacesManagement::add_race(int laps) const {
@@ -479,7 +667,7 @@ void RacesManagement::add_race(int laps) const {
             const PreparedStatement *ps = S.getPreparedStatement(SQLPreparedStatementsNames::getLatestRaceId);
             if (!ps)
                 throw ClientError("Something went wrong!");
-            SQLResult res = ps->run({to_string(laps)});
+            SQLResult res = ps->run({});
             if (!res || res.hasError() || !res.hasTableResult() || !res.getResultTable().getNumberOfTuples()) {
                 throw ClientError("Error while running the command: " + res.getErrorMessage());
             }
@@ -498,6 +686,10 @@ void RacesManagement::add_to_race(int race, std::set<int> horses) const {
     if (!RacesManagement::check_race(race)) {
         clientContainer << Connection::GOTO_BEGIN << "Error: Inserted race doesn't exist!" << Connection::endl;
         return;
+    }
+
+    if (RacesManagement::check_race_started(race)) {
+        throw ClientMessage(string("Error: Race ") + race + " has already started");
     }
 
     const PreparedStatement *ps = S.getPreparedStatement(SQLPreparedStatementsNames::insertHorseInRace);
@@ -668,7 +860,7 @@ bool RacesManagement::check_race_started(int r_i) const {
     }
 }
 
-void RacesManagement::show_horses_on_race(int r_i) const {
+void RacesManagement::show_horses_on_race(ClientContainer &clientContainer, int r_i) {
     if (!RacesManagement::check_race(r_i))
         throw ClientMessage("Inserted race doesn't exist");
 
@@ -677,7 +869,7 @@ void RacesManagement::show_horses_on_race(int r_i) const {
     const PreparedStatement *ps = S.getPreparedStatement(getHorsesOnRace);
     ClientError::throwIf(!ps);
     try {
-        SQLResult res = ps->run({});
+        SQLResult res = ps->run({to_string(r_i)});
         ClientError::throwIf(
                 res.hasError() || !res.hasTableResult(),
                 "Error while running the command: " + res.getErrorMessage()
@@ -691,7 +883,7 @@ void RacesManagement::show_horses_on_race(int r_i) const {
     }
 }
 
-void RacesManagement::show_races(bool activeOnly) const {
+void RacesManagement::show_races(ClientContainer &clientContainer, bool activeOnly) {
     if (!activeOnly) { //all races
         using namespace SQLPreparedStatementsNames;
 
@@ -714,30 +906,38 @@ void RacesManagement::show_races(bool activeOnly) const {
         if (races.size() == 0)
             throw ClientMessage("There are no active races at the moment.");
         stringstream output;
-        output << "These are the active races:" << endl;
+        output << Utils::makeHeader("These are the active races:") << endl;
         for (auto &it:races) {
-            output << "race_id=" + to_string(it.first) + " | #horses=" + to_string(it.second->horses.size()) << endl;
+            output << "\trace_id=" + to_string(it.first) + " | #horses=" + to_string(it.second->horses.size()) << endl;
         }
         output << "To go watch any of these races, use the command \"watch_race <race_id>\"." << endl;
         throw ClientMessage(output.str());
     }
 }
 
-void RacesManagement::show_race_info(int r_i) const {
+void RacesManagement::show_race_info(ClientContainer &clientContainer, int r_i) {
     if (!RacesManagement::check_race(r_i))
         throw ClientMessage("Inserted race doesn't exist");
 
-    clientContainer << Connection::GOTO_BEGIN << "#horses=" << get_num_horses_on_race(r_i) << Connection::endl;
-    clientContainer << Connection::GOTO_BEGIN << "Laps=" << get_race_laps(r_i) << Connection::endl;
-    clientContainer << Connection::GOTO_BEGIN << "Time created=" << get_race_date(r_i) << Connection::endl;
-    clientContainer << Connection::GOTO_BEGIN << "Started=" << get_race_started(r_i) << Connection::endl;
+    clientContainer << Connection::endl << Connection::GOTO_BEGIN << "#horses="
+                    << static_cast<AdminClient *>(clientContainer.getCurrentUser())->get_num_horses_on_race(r_i)
+                    << Connection::endl;
+    clientContainer << Connection::GOTO_BEGIN << "Laps="
+                    << static_cast<AdminClient *>(clientContainer.getCurrentUser())->get_race_laps(r_i)
+                    << Connection::endl;
+    clientContainer << Connection::GOTO_BEGIN << "Time created="
+                    << static_cast<AdminClient *>(clientContainer.getCurrentUser())->get_race_date(r_i)
+                    << Connection::endl;
+    clientContainer << Connection::GOTO_BEGIN << "Started="
+                    << static_cast<AdminClient *>(clientContainer.getCurrentUser())->get_race_started(r_i)
+                    << Connection::endl;
     auto temp = races.find(r_i);
     bool temp_b = temp != races.end();
     clientContainer << Connection::GOTO_BEGIN << "Active now=" << temp_b << Connection::endl;
     if (temp_b)
         clientContainer << Connection::GOTO_BEGIN << "Finished=" << temp->second->finished << Connection::endl;
     clientContainer << Connection::GOTO_BEGIN << "Horses on race:" << Connection::endl;
-    show_horses_on_race(r_i);
+    show_horses_on_race(clientContainer, r_i);
 }
 
 bool RacesManagement::get_race_started(int r_i) const {
@@ -857,40 +1057,90 @@ void RacesManagement::start_race() const {
     }
 }
 
-void RacesManagement::showAllRaces() const {
+void RacesManagement::showAllRaces(ClientContainer &clientContainer) {
     try {
-        show_races(false);
+        show_races(clientContainer, false);
     } catch (ClientMessage &cm) {
         cm.show(clientContainer);
     }
 }
 
-void RacesManagement::showActiveRaces() const {
+void RacesManagement::showActiveRaces(ClientContainer &clientContainer) {
     try {
-        show_races(true);
+        show_races(clientContainer, true);
     } catch (ClientMessage &cm) {
         cm.show(clientContainer);
     }
 }
 
-void RacesManagement::showRaceInfo() const {
+void RacesManagement::showRaceInfo(ClientContainer &clientContainer) {
     int race = clientContainer.getInt("Race id");
 
     try {
-        show_race_info(race);
+        show_race_info(clientContainer, race);
     } catch (ClientMessage &cm) {
         cm.show(clientContainer);
     }
 }
 
-void RacesManagement::showHorsesOnRace() const {
+void RacesManagement::showHorsesOnRace(ClientContainer &clientContainer) {
     int race = clientContainer.getInt("Race id");
 
     try {
-        show_horses_on_race(race);
+        show_horses_on_race(clientContainer, race);
     } catch (ClientMessage &cm) {
         cm.show(clientContainer);
     }
+}
+
+//---------------------------OtherAdmin---------------------------//
+
+OtherAdmin::OtherAdmin(ClientContainer &clientContainer) : PrivilegeGroup("Dangerous options", clientContainer) {
+    Command *_runSQL = new Command("SQLquery", "Runs a SQL query",
+                                   {},
+                                   [this]() { const_cast<OtherAdmin *>(this)->run_sql(); });
+    commands.push_back(_runSQL);
+
+    Command *_startServer = new Command("StartServer", "Starts the server",
+                                        {},
+                                        [this]() { const_cast<OtherAdmin *>(this)->startServer(); });
+    commands.push_back(_startServer);
+
+    Command *_shutdownServer = new Command("ShutdownServer", "Shuts down the server; All clients will be kicked",
+                                           {},
+                                           [this]() { const_cast<OtherAdmin *>(this)->shutdownServer(); });
+    commands.push_back(_shutdownServer);
+}
+
+void OtherAdmin::run_sql() const {
+    string q = clientContainer.getString("query:" + Connection::endl);
+
+    if (q == "")
+        return;
+    PGresult *res = NULL;
+    try {
+        res = SQLServer::server().executeSQL(q);
+    }
+    catch (DBMSError &e) {
+        //clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
+        clientContainer << "The query entered originated the following error message:." << Connection::endl
+                        << string(e.what());
+        clog("User " << clientContainer.user_id
+                     << " used the \"sql_query\" command and originated an error. Query inserted:" << endl << q << endl
+                     << endl << "Error message:" << endl << PQresultErrorMessage(res));
+        return;
+    }
+    clog("User " << clientContainer.user_id << " used the \"sql_query\" command. Query inserted:" << endl << q);
+    clientContainer << SQLResultTable::getPrintedTable(res) << Connection::endl;
+    PQclear(res);
+}
+
+void OtherAdmin::startServer() {
+    Network::server().start_server();
+}
+
+void OtherAdmin::shutdownServer() {
+    Network::server().shutdown_server();
 }
 
 //////---------------------------BetsManagement---------------------------//

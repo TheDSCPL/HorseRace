@@ -101,6 +101,12 @@ protected:
 public:
     void watch_race();
 
+    void show_horses() const;
+
+    void showMyUserID() const;
+
+    void showUserCredits() const;
+
     void logout();
 };
 
@@ -133,6 +139,10 @@ public:
 
     void isAdmin() const;
 
+    void showUserCredits() const;
+
+    static double get_user_credits(int ui);
+
     static void change_admin(int id, bool ad);
 
     static void change_admin(std::string login_name, bool ad) {
@@ -149,18 +159,20 @@ public:
     static bool check_user(int u_i);
 };
 
-class HorsesManagement/* : public PrivilegeGroup*/ {
-//protected:
-//    HorsesManagement(ClientContainer&);
-//
-//    std::string getGroupHelp() const;
+class HorsesManagement : public PrivilegeGroup {
+protected:
+    HorsesManagement(ClientContainer &);
+
+    static int get_horse_id(std::string h_name);
 public:
-//
-//    void add_horse(double speed , std::string h_name) const; //name space contain spaces
-//    std::string get_horse_name(int horse) const;
-//    int get_horse_id(std::string h_name) const;
+
+    void add_horse() const;
+
+    void add_horse(double speed, std::string h_name) const;
     static bool check_horse(int h_i);
-//    void show_horses(int n=0) const; //show horses and their ranks. show only the best n horses. n<=0 to show all
+
+    static std::string
+    show_horses(unsigned int n); //show horses and their ranks. show only the best n horses. n==0 to show all
 };
 
 class RacesManagement : public PrivilegeGroup {
@@ -172,9 +184,9 @@ class RacesManagement : public PrivilegeGroup {
 
     void start_race(int r_i) const;
 
-    void show_races(bool activeOnly) const;
+    static void show_races(ClientContainer &clientContainer, bool activeOnly);
 
-    void show_race_info(int r_i) const;
+    static void show_race_info(ClientContainer &clientContainer, int r_i);
 
     bool get_race_started(int r_i) const;
 
@@ -190,7 +202,7 @@ class RacesManagement : public PrivilegeGroup {
 
     bool check_race_started(int r_i) const;
 
-    void show_horses_on_race(int r_i) const;
+    static void show_horses_on_race(ClientContainer &clientContainer, int r_i);
 
 protected:
     RacesManagement(ClientContainer &);
@@ -202,15 +214,27 @@ public:
 
     void start_race() const;
 
-    void showAllRaces() const;
+    static void showAllRaces(ClientContainer &clientContainer);
 
-    void showActiveRaces() const;
+    static void showActiveRaces(ClientContainer &clientContainer);
 
-    void showRaceInfo() const;
+    static void showRaceInfo(ClientContainer &clientContainer);
 
-    void showHorsesOnRace() const;
+    static void showHorsesOnRace(ClientContainer &clientContainer);
 
     static bool check_race(int r_i); //checks if a race exists
+};
+
+class OtherAdmin : public PrivilegeGroup {
+protected:
+    OtherAdmin(ClientContainer &);
+
+public:
+    void run_sql() const;
+
+    void startServer();
+
+    void shutdownServer();
 };
 
 //class BetsManagement : public PrivilegeGroup {
@@ -267,7 +291,8 @@ class AdminClient
           public BasicU,
           public LoggedIn,
           public SelfManagement,
-          public UsersManagement/*, public HorsesManagement*/,
+          public UsersManagement,
+          public HorsesManagement,
           public RacesManagement/*, public BetsManagement*/ {
     void helloImAnAbstractClass() {}
 

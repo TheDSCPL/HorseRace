@@ -309,8 +309,8 @@ void Network::cliente(int newsockfd) {
         try {
             vector<CommandSet> &commadSets = clientContainer->getCommandSets();
             int counter = 0, input;
-            *clientContainer << Connection::endl << Connection::GOTO_BEGIN << counter++ << " - quit"
-                             << Connection::endl;
+            *clientContainer << Connection::GOTO_BEGIN << Utils::makeHeader("Main menu") << Connection::endl;
+            *clientContainer << Connection::GOTO_BEGIN << counter++ << " - quit" << Connection::endl;
             for (auto &c : commadSets)
                 *clientContainer << Connection::GOTO_BEGIN << counter++ << " - " << c.getGroup()->getGroupName()
                                  << Connection::endl;
@@ -456,14 +456,17 @@ int Connection::getSocketId() const {
 
 //TODO: if EOF, throw something to cancel the command
 
-int Connection::getInt(const string &msg) const {
+int Connection::getInt(const string &msg, bool positive) const {
     int ret;
     do {
         try {
             *this << msg << ": ";
             *this >> ret;
+            if (positive && ret < 0)
+                throw logic_error("");
         } catch (logic_error &le) {
-            *this << Connection::GOTO_BEGIN << "Only integers are allowed!" << Connection::endl;
+            *this << Connection::GOTO_BEGIN << "Only " << (positive ? "positive " : "") << "integers are allowed!"
+                  << Connection::endl;
             continue;
         }
         break;
@@ -471,14 +474,17 @@ int Connection::getInt(const string &msg) const {
     return ret;
 }
 
-double Connection::getDouble(const string &msg) const {
+double Connection::getDouble(const string &msg, bool positive) const {
     double ret;
     do {
         try {
             *this << msg << ": ";
             *this >> ret;
+            if (positive && ret < 0)
+                throw logic_error("");
         } catch (logic_error &le) {
-            *this << Connection::GOTO_BEGIN << "Only floating point values are allowed!" << Connection::endl;
+            *this << Connection::GOTO_BEGIN << "Only " << (positive ? "positive " : "")
+                  << "floating point values are allowed!" << Connection::endl;
             continue;
         }
         break;
