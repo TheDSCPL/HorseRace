@@ -171,21 +171,21 @@ void LoggedIn::watch_race() {
         clientContainer << Connection::GOTO_BEGIN << "Invalid race." << Connection::endl;
         return;
     }
-    auto temp = races.find(r_i);
+    map<Connection *, Race *>::iterator temp = races.begin();
+    for (; temp != races.end(); temp++)
+        if (temp->second->getRaceId() == r_i)
+            break;
     if (temp == races.end()) {
         clientContainer << Connection::GOTO_BEGIN << "Race not active." << Connection::endl;
         return;
     }
-    if (temp->second->sockets_watching.find(clientContainer.getSocketId()) != temp->second->sockets_watching.end()) {
-        clientContainer << Connection::GOTO_BEGIN << "Client already watching the race." << Connection::endl;
-        return;
-    }
     clientContainer.clear();
     string dummy;
-    temp->second->sockets_watching.insert(clientContainer.getSocketId());
+
+    temp->second->sockets_watching.insert(&clientContainer);
     clientContainer >> dummy;
     //Network::server().readline(clientContainer.getSocketId(),dummy);
-    temp->second->sockets_watching.erase(clientContainer.getSocketId());
+    temp->second->sockets_watching.erase(&clientContainer);
     usleep(100);
     clientContainer.clear();
 }
@@ -205,7 +205,6 @@ void LoggedIn::showUserCredits() const {
 }
 
 void LoggedIn::logout() {
-    Network::server().clients[clientContainer.getSocketId()] = clientContainer.user_id = LOGGED_OFF;
     clog("Socket " << clientContainer.getSocketId() << " which was logged with user_id=" << clientContainer.user_id
                    << ", username \"" << clientContainer.username << "\" and name \"" << clientContainer.name
                    << "\" has logged off");
@@ -729,7 +728,11 @@ void RacesManagement::start_race(int r_i) const {
         clientContainer << Connection::GOTO_BEGIN << "Invalid race_id." << Connection::endl;
         return;
     }
-    if (races.find(r_i) != races.end()) {
+    map<Connection *, class Race *>::iterator it;
+    for (it = races.begin(); it != races.end(); it++)
+        if (it->second->getRaceId() == r_i)
+            break;
+    if (it != races.end()) {
         clientContainer << Connection::GOTO_BEGIN << "Race already active." << Connection::endl;
         return;
     }
@@ -755,7 +758,7 @@ void RacesManagement::start_race(int r_i) const {
         clientContainer << Connection::endl;
         return;
     }
-    races.insert(pair<int, class Race *>(r_i, new Race(r_i, get_race_laps(r_i))));
+    races.insert(make_pair(&clientContainer, new Race(r_i, get_race_laps(r_i))));
     clientContainer << Connection::GOTO_BEGIN << "Race started." << Connection::endl;
 }
 
@@ -908,7 +911,8 @@ void RacesManagement::show_races(ClientContainer &clientContainer, bool activeOn
         stringstream output;
         output << Utils::makeHeader("These are the active races:") << endl;
         for (auto &it:races) {
-            output << "\trace_id=" + to_string(it.first) + " | #horses=" + to_string(it.second->horses.size()) << endl;
+            output << "\trace_id=" << it.second->getRaceId() << " | #horses=" + to_string(it.second->horses.size())
+                   << endl;
         }
         output << "To go watch any of these races, use the command \"watch_race <race_id>\"." << endl;
         throw ClientMessage(output.str());
@@ -931,7 +935,11 @@ void RacesManagement::show_race_info(ClientContainer &clientContainer, int r_i) 
     clientContainer << Connection::GOTO_BEGIN << "Started="
                     << static_cast<AdminClient *>(clientContainer.getCurrentUser())->get_race_started(r_i)
                     << Connection::endl;
-    auto temp = races.find(r_i);
+
+    map<Connection *, class Race *>::iterator temp;
+    for (temp = races.begin(); temp != races.end(); temp++)
+        if (temp->second->getRaceId() == r_i)
+            break;
     bool temp_b = temp != races.end();
     clientContainer << Connection::GOTO_BEGIN << "Active now=" << temp_b << Connection::endl;
     if (temp_b)

@@ -9,18 +9,19 @@
 
 using namespace Constants;
 
-map<int,class Race*> races;
+std::map<Connection *, class Race *> races;
 
-void Race::writeline(int so, string s,int column,int line)
+void Race::writeline(Connection *con, string s, int column, int line)
 { // Envia uma string para um socket
-	if(Network::server().clients.find(so)==Network::server().clients.end())
+	if (Network::server().clients.find(con) == Network::server().clients.end())
 		return;
 	if(column>=0&&line>=0)
 		s="\u001B[s\u001B[" + to_string(line) + ";" + to_string(column) + "H"  + s + "\u001B[u";
-	if(so<0)
-		{LOCK; cerr << s ;UNLOCK;}
-	else
-		write(so, s.c_str(), s.length());
+	*con << s;
+//	if(so<0)
+//		{LOCK; cerr << s ;UNLOCK;}
+//	else
+//		write(so, s.c_str(), s.length());
 }
 
 void Race::count_down(int secs)
@@ -108,7 +109,7 @@ Race::Race(int r_i, int l) : next_place(-1), race_id(r_i), laps(l), bets(get_rac
 	{
 		cerr << "Error while starting race " << r_i << "'s thread!" << endl;
 		clog( "FATAL ERROR: Race::Race() -> Couldn't start a race thread for race " << r_i << ". Program will now halt!");
-		Network::server().broadcast(-1,"FATAL ERROR ON RACE!");
+		Network::server().broadcast(nullptr, "FATAL ERROR ON RACE!");
 		exit(-1);
 	}
 }
@@ -154,18 +155,25 @@ void Race::print_tracks()
 
 bool comp(horse_info a, horse_info b)
 {
-	if(a.place>0)	//a finished
-	{
-		if(b.place>0)	//both a and b finished
-			return a.place<b.place;
-		return true;	//a finished but b didn't
-	}
-	else	//a didn't finish
-	{
-		if(b.place>0)	//a didn't finish but b did
-			return false;
-		return a.position>b.position;	//both didn't finish
-	}
+	if (a.place > 0 && b.place <= 0)
+		return true;
+	if (a.place <= 0 && b.place > 0)
+		return false;
+	if (a.place <= 0 && b.place <= 0)
+		return a.position > b.position;
+	return a.place > b.place;
+//	if(a.place>0)	//a finished
+//	{
+//		if(b.place>0)	//both a and b finished
+//			return a.place<b.place;
+//		return true;	//a finished but b didn't
+//	}
+//	else	//a didn't finish
+//	{
+//		if(b.place>0)	//a didn't finish but b did
+//			return false;
+//		return a.position>b.position;	//both didn't finish
+//	}
 }
 
 void Race::print_update_places()
@@ -421,6 +429,10 @@ void Race::add_credits(int u_i, double cr)
 	PQclear(res);
 }
 
+int Race::getRaceId() const {
+	return race_id;
+}
+
 void Race::add_balance(int r_i,int u_i, int h_i, double cr)
 {
 	if(cr==0)
@@ -491,7 +503,7 @@ void Race::race_routine()
 		
 	for(auto &it:horses)	//set places
 	{
-		if(!check_horse_in_race(it.first,race_id))
+		if (!RacesManagement::check_horse_in_race(it.first, race_id))
 			continue;
 		query.str("");query.clear();
 		query << "BEGIN;";
@@ -635,6 +647,10 @@ void Race::race_routine()
 		usleep(1*1000000);
 	}
 	clog("Race " + to_string(race_id) + "'s thread terminaded.");
-	races.erase(race_id);
+	for (auto it = races.begin(); it != races.end(); it++)
+		if (it->second->getRaceId() == race_id) {
+			races.erase(it);
+			break;
+		}
 	delete this;
 }

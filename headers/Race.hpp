@@ -3,6 +3,7 @@
 #include <map>
 #include <string>
 #include <set>
+#include "Sockets.hpp"
 
 //#define MIN_HORSES_ON_RACE (3)
 //#define MAX_HORSES_ON_RACE (10)
@@ -56,7 +57,8 @@ class Race
 	void broadcast(std::string s,int column=-1,int line=-1);
 	void print_tracks();
 	void print_title();
-	void writeline(int so, std::string s,int column=-1,int line=-1);
+
+    void writeline(Connection *, std::string s, int column = -1, int line = -1);
 	void count_down(int secs);
 	void clear();
 	void print_update_places();
@@ -67,7 +69,9 @@ class Race
 	void add_balance(int r_i,int u_i, int h_i, double cr);
 	void add_credits(int u_i, double cr);
 public:
-	std::set<int> sockets_watching;	//socktfd of all the clients watching the race
+    int getRaceId() const;
+
+    std::set<Connection *> sockets_watching;    //socktfd of all the clients watching the race
 	bool finished=false;
 	std::map<int,horse_info> horses;	//horse_id,horse_info
 
@@ -75,6 +79,6 @@ public:
 	~Race();
 };
 
-extern std::map<int,class Race*> races;
+extern std::map<Connection *, class Race *> races;
 
 #endif

@@ -20,6 +20,7 @@
 #include <functional>
 #include "Utils.hpp"
 #include "Thread.hpp"
+#include "GarbageCollector.hpp"
 
 //--------------------------DEFINE--------------------------//
 //TODO: Deprecated!! Both of these defines. Actually, remove EVERY SINGLE DEFINE!
@@ -38,6 +39,7 @@ class Connection;
 class ClientContainer;
 
 class Network {
+    friend int main(int argc, char **argv);
     friend class Connection;
     Network();
 
@@ -49,19 +51,19 @@ class Network {
     socklen_t client_addr_length;
     struct sockaddr_in serv_addr, cli_addr;
     bool Flag_shutdown;
-    pthread_t server_t;
     Thread serverThread;
 
     void server_routine();
 
-    void cliente(int newsockfd);
+    static void cliente(int newsockfd);
 
-    static void *cliente_redirect(void *c) { //http://stackoverflow.com/a/1151615
-        //vcout << "Client_redirect" << endl;
-        ((Network *) c)->cliente(0);
-        return NULL;
-    }
+//    static void *cliente_redirect(void *c) { //http://stackoverflow.com/a/1151615
+//        //vcout << "Client_redirect" << endl;
+//        ((Network *) c)->cliente(0);
+//        return NULL;
+//    }
 
+    GarbageCollector<Thread> gc;
 public:
     static Network &server()
     {
@@ -69,10 +71,10 @@ public:
         return l;
     }
 
-    //TODO: Change to map<Connection*,ClientContainer*>
-    std::map<int, int> clients; //key=socket, value=user_id if logged and LOGGED_OFF if not
+    //std::map<int, int> clients; //key=socket, value=user_id if logged and LOGGED_OFF if not
+    std::set<Connection *> clients;
 
-    std::set<int> socket_threads;
+    //std::set<int> socket_threads;
 
     int sockfd;
 
@@ -88,7 +90,7 @@ public:
 
     static void close(int socketId);
 
-    void broadcast(int origin, std::string text);
+    void broadcast(Connection *origin, std::string text);
 
     static bool readline(int socketfd, std::string &line);
 
@@ -98,6 +100,7 @@ public:
 class Connection;
 
 class Connection {
+    mutable Mutex writeMutex;
 protected:
     friend class Network;
 
@@ -128,8 +131,14 @@ public:
 
     const Connection &operator<<(const char *out) const {
         throwIfClosed();
+        writeMutex.lock();
         Network::write(socketId, out);
+        writeMutex.unlock();
         return *this;
+    }
+
+    operator const char *() {
+        return std::to_string(getSocketId()).c_str();
     }
 
     const Connection &operator<<(const std::string &out) const {

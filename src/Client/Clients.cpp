@@ -33,7 +33,8 @@ AdminClient::AdminClient(ClientContainer &clientContainer) :
         UsersManagement(clientContainer),
         HorsesManagement(clientContainer),
         //BetsManagement(clientContainer),
-        RacesManagement(clientContainer) {
+        RacesManagement(clientContainer),
+        OtherAdmin(clientContainer) {
     commandSet.push_back({BasicU::getThis(), BasicU::getCommands()});
     commandSet.push_back({LoggedIn::getThis(), LoggedIn::getCommands()});
     commandSet.push_back({SelfManagement::getThis(), SelfManagement::getCommands()});
@@ -41,4 +42,5 @@ AdminClient::AdminClient(ClientContainer &clientContainer) :
     commandSet.push_back({HorsesManagement::getThis(), HorsesManagement::getCommands()});
 //    commandSet.push_back({BetsManagement::getThis(), BetsManagement::getCommands()});
     commandSet.push_back({RacesManagement::getThis(), RacesManagement::getCommands()});
+    commandSet.push_back({OtherAdmin::getThis(), OtherAdmin::getCommands()});
 }

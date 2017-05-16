@@ -192,8 +192,6 @@ class RacesManagement : public PrivilegeGroup {
 
     int get_race_laps(int r_i) const;
 
-    static bool check_horse_in_race(int h_i, int r_i);
-
     bool check_horse_available(int h_i) const;
 
     std::string get_race_date(int r_i) const;
@@ -223,6 +221,8 @@ public:
     static void showHorsesOnRace(ClientContainer &clientContainer);
 
     static bool check_race(int r_i); //checks if a race exists
+
+    static bool check_horse_in_race(int h_i, int r_i);
 };
 
 class OtherAdmin : public PrivilegeGroup {
@@ -293,7 +293,8 @@ class AdminClient
           public SelfManagement,
           public UsersManagement,
           public HorsesManagement,
-          public RacesManagement/*, public BetsManagement*/ {
+          public RacesManagement/*, public BetsManagement*/,
+          public OtherAdmin {
     void helloImAnAbstractClass() {}
 
 public:
@@ -322,6 +323,8 @@ public:
 
     bool isInServer() const;
 
+    static void initPreparedStatements();
+
     std::vector<CommandSet> &getCommandSets();
 
     ~ClientContainer();
@@ -329,7 +332,7 @@ public:
 
 //DEPRECATED CLIENT
 
-class Client {
+/*class Client {
 
 public:
     void static initPreparedStatements();
@@ -429,16 +432,16 @@ class arg  //funciona
     template<typename T>
     arg(const T &);
 
-    /*bool operator=(const boost::any& st) {
+    *//*bool operator=(const boost::any& st) {
       return this->set(st);
-    }*/
+    }*//*
 
     bool set(const boost::any& st);
     //public functions
     template <typename T> T get() const;
     bool isEmpty() const;
     bool isOfType(const std::type_info&) const;
-};
+};*/
 
 class Command {
     friend class ClientContainer;
@@ -484,7 +487,5 @@ public:
 class QuitClient {
 
 };
-
-bool check_horse_in_race(int h_i, int r_i);
 
 #endif

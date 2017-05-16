@@ -812,7 +812,6 @@ void Client::login(string login_name, string pass)
 
 	name=PQgetvalue(res,0,1);
 	username=login_name;
-	Network::server().clients[client_socket]=user_id;
 
 	clog("Socket " << client_socket << " logged in as user_id " << user_id << ", username \"" << username << "\"");
 	query.str("");query.clear();
@@ -860,7 +859,14 @@ void Client::logout()
 		return;
     writeline("You are now logged off!");
 	clog("Socket " << client_socket << " which was logged with user_id=" << user_id << ", username \"" << username << "\" and name \"" << name << "\" has logged off");
-	Network::server().clients[client_socket]=user_id=LOGGED_OFF;
+    Connection *t = nullptr;
+    for (Connection *c : Network::server().clients)
+        if (c->getSocketId() == client_socket) {
+            t = c;
+            break;
+        }
+    user_id = LOGGED_OFF;
+    static_cast<ClientContainer *>(t)->user_id = user_id;
 	name="";
 	username="";
 }

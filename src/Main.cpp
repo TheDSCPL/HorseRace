@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
     system("clear");
 
     S.start();
-    Client::initPreparedStatements();
+    ClientContainer::initPreparedStatements();
 
     clog("Program has started");
 
@@ -127,21 +127,36 @@ int main(int argc, char *argv[])
 
     //--------------------------------SERVER CLIENT ROUTINE---------------------------------//
 
-    Client c;
+    Thread serverClient(
+            []() {
+                Network::cliente(Constants::IN_SERVER);
+            }, []() {
+                //cout << "ON_STOP" << endl;
+            }
+    );
+    serverClient.start();
+    serverClient.join();
 
-    cout << "> ";
-
-    for (string input; getline(cin, input); cout << "> ") {
-        if (!c.parse(input))
-            break;
-    }
+//    Client c;
+//
+//    cout << "> ";
+//
+//    for (string input; getline(cin, input); cout << "> ") {
+//        if (!c.parse(input))
+//            break;
+//    }
 
     //------------------------------SHUTTING DOWN------------------------------//
 
     Network::server().shutdown_server();
 
-    pthread_t watchdog;
-    pthread_create(&watchdog, NULL, watchdog_routine, NULL);
+    Thread watchdog([]() {
+        Thread::usleep(WATCHDOG_TIMER * 1000000);
+        clog("WATCHDOG!!!");
+        exit(-1);
+    });
+    watchdog.start();
+    watchdog.join();
 
     while (races.size()) usleep(500);
 

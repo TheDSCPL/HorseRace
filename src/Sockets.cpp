@@ -6,6 +6,7 @@
 #include "../headers/Constants.hpp"
 #include "../headers/Thread.hpp"
 #include "../headers/GarbageCollector.hpp"
+#include "../headers/Race.hpp"
 
 using namespace Constants;
 
@@ -15,7 +16,13 @@ using namespace Constants;
 
 pthread_mutex_t cout_mutex;
 
-Network::Network() : Flag_shutdown(false), server_t(0), serverThread([this]() { server_routine(); }) {
+Network::Network() : Flag_shutdown(false), serverThread([this]() { server_routine(); }),
+                     gc([](const Thread *t) -> bool {
+                            return t->isRunning();
+                        }, [](Thread *t) -> void {
+                            t->cancel();
+                        }
+                     ) {
     clog("Entered Network's constructor");
     // Inicializar o socket
     // sockfd - id do socket principal do servidor
@@ -33,10 +40,11 @@ Network::~Network() {
 
     clog("Ending all threads");
     vcout << "Ending all threads" << endl;
-    while (socket_threads.size()) {
-        pthread_join(*socket_threads.begin(), NULL);
-        socket_threads.erase(*socket_threads.begin());
-    }
+//    while (socket_threads.size()) {
+//        pthread_join(*socket_threads.begin(), NULL);
+//        socket_threads.erase(*socket_threads.begin());
+//    }
+
     clog("Done ending threads");
     vcout << "Done ending threads" << endl;
 
@@ -180,21 +188,27 @@ bool Network::readline(int socketfd,
     return true;
 }
 
-void Network::broadcast(int origin, string text) { // Envia uma mensagem para todos os clientes ligados exceto 1
+void Network::broadcast(Connection *origin, string text) { // Envia uma mensagem para todos os clientes ligados exceto 1
     // Usamos um ostringstream para construir uma string
     // Funciona como um cout mas em vez de imprimir no ecrã
     // imprime numa string
 
-    if (clients[origin] == LOGGED_OFF) clog("Socket " << origin << " (not logged in) broadcasted: \"" << text << "\"")
-    else clog("Socket " << origin << " (user_id=" << clients[origin] << ") broadcasted: \"" << text << "\"")
+    if (origin == nullptr) {
+        clog("Global message broadcasted: \"" << text << "\"")
+    } else {
+        if (origin->getSocketId() == LOGGED_OFF) clog(
+                "Socket " << origin << " (not logged in) broadcasted: \"" << text << "\"")
+        else clog("Socket " << origin << " (user_id=" << static_cast<ClientContainer *>(origin)->user_id
+                            << ") broadcasted: \"" << text << "\"")
+    }
 
-    stringstream message;
-    message << origin << " said: " << text;
 
-    // Iterador para sets de inteiros
-    map<int, int>::iterator it;
-    for (it = clients.begin(); it != clients.end(); it++)
-        if (it->first != origin) writeline(it->first, message.str());
+    for (auto it = clients.begin(); it != clients.end(); it++) {
+        if (origin != nullptr && *it != origin)
+            **it << origin->getSocketId() << " said: " << text;
+        else if (origin == nullptr)
+            **it << "Global message: " << text;
+    }
 }
 
 void Network::server_routine() {
@@ -239,7 +253,6 @@ void Network::server_routine() {
     shutdown_server();
     //vcout << "Leaving server routine" << endl;
     Flag_shutdown = false;
-    server_t = 0;
 
     clog("Leaving server routine");
 }
@@ -260,29 +273,36 @@ void Network::shutdown_server() {
     close(dummy);
 
     vcout << "clients size=" << clients.size() << endl;
-    int s_u_i = clients[IN_SERVER]; //to save the user that was logged in the server because i don't want to close the server client, just the network clients
+    Connection *serverTerminalConnection = nullptr; //to save the user that was logged in the server because i don't want to close the server client, just the network clients
+    for (Connection *c : clients)
+        if (c->getSocketId() == IN_SERVER) {
+            serverTerminalConnection = c;
+            break;
+        }
     while (clients.size()) //fecha todas as sockets, terminando os reads e consequentemente as threads dos clientes
     {
-        if (clients.begin()->first != IN_SERVER) {
-            close(clients.begin()->first);
-            cerr << "closed socket " << clients.begin()->first << endl;
+        Connection *c = *clients.begin();
+        if (c != nullptr && c->getSocketId() != IN_SERVER) {
+            close(c->getSocketId());
+            cerr << "closed socket " << c->getSocketId() << endl;
         }
-        clients.erase(clients.begin()->first);
+        clients.erase(c);
     }
-    clients.insert(make_pair(IN_SERVER, s_u_i));
+    clients.insert(serverTerminalConnection);
 
-    vcout << "Joining clients threads" << endl;
+    vcout << "Cancelling clients threads" << endl;
 
-    for (auto it = socket_threads.begin(); it != socket_threads.end(); it++) {
-        pthread_join(*it, NULL);
-    }
+//    for (auto it = socket_threads.begin(); it != socket_threads.end(); it++) {
+//        pthread_join(*it, NULL);
+//    }
 
-    vcout << "All threads joined" << endl;
+    gc.forceAll();
+
+    vcout << "All threads canceled" << endl;
 
     clog("All clients kicked");
 
     Flag_shutdown = false;
-    server_t = 0;
 
     clog("Network server successfully shutdown");
 }
@@ -295,6 +315,7 @@ bool Network::isRunning() {
 void Network::cliente(int newsockfd) {
     //unique_ptr<ClientContainer> clientContainer(new ClientContainer(newsockfd));
     ClientContainer *clientContainer = new ClientContainer(newsockfd);
+    Network::server().clients.insert(clientContainer);
 
     //LOCK;cerr << "\u001B[8DNew client accepted on socket " << client_socket << "." << endl << "> ";UNLOCK;
     clog("New client accepted on socket " << clientContainer->socketId << ". Thread where this socket is being heard: "
@@ -443,6 +464,7 @@ Connection::Connection(int socketId) : socketId(socketId), closed(false) {
 Connection::~Connection() {
     close();
     connections.erase(this);
+    races.erase(this);
 }
 
 void Connection::throwIfClosed() const {

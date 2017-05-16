@@ -8,7 +8,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -std=c++14 -Wall -pedantic")
 #MY VARIABLES
 set(SRC_DIR ${PROJECT_SOURCE_DIR}/src)
 set(HEADER_DIR ${PROJECT_SOURCE_DIR}/headers)
-set(FILES Client DBMS Log Properties Race Sockets Utils SHA)
+set(FILES DBMS Log Properties Race Sockets Utils SHA)
 
 STRING(REPLACE "/" "\\/" SRC_DIR ${SRC_DIR})
 STRING(REPLACE "/" "\\/" HEADER_DIR ${HEADER_DIR})
