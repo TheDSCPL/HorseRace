@@ -1128,8 +1128,7 @@ void OtherAdmin::run_sql() const {
     PGresult *res = NULL;
     try {
         res = SQLServer::server().executeSQL(q);
-    }
-    catch (DBMSError &e) {
+    } catch (DBMSError &e) {
         //clog("Query in \"Client::change_admin\" glitched. user_id=" << id << ".");
         clientContainer << "The query entered originated the following error message:." << Connection::endl
                         << string(e.what());
