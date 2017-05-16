@@ -3,7 +3,7 @@ project(HorseRace)
 
 set(CMAKE_CXX_STANDARD 14)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -std=c++14")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -std=c++14 -Wall -pedantic")
 
 #MY VARIABLES
 set(SRC_DIR ${PROJECT_SOURCE_DIR}/src)
@@ -34,7 +34,7 @@ STRING(REPLACE "\\/" "/" HEADER_DIR ${HEADER_DIR})
 #link_directories(/usr/lib/x86_64-linux-gnu)
 
 #COMPILE
-add_executable(BOP2_proj ${SRC_DIR}/Main.cpp ${SOURCE_FILES} ${HEADER_FILES} src/Client/Clients.cpp src/Client/Privileges.cpp src/Client/ClientBases.cpp src/Client/ClientOthers.cpp src/Thread.cpp headers/Thread.hpp)
+add_executable(BOP2_proj ${SRC_DIR}/Main.cpp ${SOURCE_FILES} ${HEADER_FILES} src/Client/Clients.cpp src/Client/Privileges.cpp src/Client/ClientBases.cpp src/Client/ClientOthers.cpp src/Thread.cpp headers/Thread.hpp headers/GarbageCollector.hpp)
 TARGET_LINK_LIBRARIES(BOP2_proj pq)
 TARGET_LINK_LIBRARIES(BOP2_proj cryptopp)
 #TARGET_LINK_LIBRARIES(BOP2_proj boost_regex)

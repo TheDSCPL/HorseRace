@@ -4,8 +4,8 @@
 #include <string>
 #include <set>
 
-#define MIN_HORSES_ON_RACE (3)
-#define MAX_HORSES_ON_RACE (10)
+//#define MIN_HORSES_ON_RACE (3)
+//#define MAX_HORSES_ON_RACE (10)
 #define LAP_SCREEN_LENGTH (36)
 #define LAP_REAL_LENGTH (80)
 #define RACE_DELAY (10)
@@ -45,7 +45,7 @@ class Race
 	const int race_id;
 	pthread_t race_t;
 	const int laps;
-	const int bets=0;
+	double bets;
 
 	static void* race_routine_redirect(void* t)
 	{

@@ -1,10 +1,11 @@
 #include "../headers/Sockets.hpp"
-#include "../headers/DBMS.hpp"
 #include "../headers/Log.hpp"
 #include "../headers/Client.hpp"
 #include "../headers/Properties.hpp"
 #include "../headers/Utils.hpp"
 #include "../headers/Constants.hpp"
+#include "../headers/Thread.hpp"
+#include "../headers/GarbageCollector.hpp"
 
 using namespace Constants;
 
@@ -14,7 +15,7 @@ using namespace Constants;
 
 pthread_mutex_t cout_mutex;
 
-Network::Network() : server_running(false), Flag_shutdown(false), server_t(0) {
+Network::Network() : Flag_shutdown(false), server_t(0), serverThread([this]() { server_routine(); }) {
     clog("Entered Network's constructor");
     // Inicializar o socket
     // sockfd - id do socket principal do servidor
@@ -41,7 +42,6 @@ Network::~Network() {
 
     pthread_mutex_destroy(&cout_mutex);
     //vcout << "Closing server socket." << endl;
-    shutdown(sockfd, 2);
     close(sockfd);
     clog("Network destroyed");
     vcout << "Network destroyed" << endl;
@@ -49,10 +49,7 @@ Network::~Network() {
 
 void Network::start_server() {
     clog("Starting server (\"start_server()\")");
-    //S; //Start SQL server;
-    if (server_running) {
-        cerr << "Server's already running" << endl;
-        clog("Error: start_server() -> Server is already running");
+    if (serverThread.isRunning()) {
         return;
     }
     const int enable_resuse_addr = 1;
@@ -85,18 +82,12 @@ void Network::start_server() {
     // ficar até 5 ligações pendentes antes de fazermos accept
     listen(sockfd, 5);
 
-    if (pthread_create(&server_t, NULL, server_routine_redirect, (void *) this)) {
-        cerr << "Error while starting server thread" << endl;
-        clog("Error: start_server() -> Couldn't start a server thread");
-        return;
-    }
-    //socket_threads.insert(server_t);
+    serverThread.start();
 
     cout << "Telnet server started on " << get_ip(sockfd) << ':' << Properties::getDefault().getProperty("PORT")
          << ". Accepting clients." << endl << endl;
     clog("Telnet server started on " << get_ip(sockfd) << ':' << Properties::getDefault().getProperty("PORT")
                                      << ". Accepting clients.");
-    server_running = true;
 }
 
 void Network::writeline(int so, string line, bool paragraph) { // Envia uma string para um socket
@@ -107,12 +98,27 @@ void Network::writeline(int so, string line, bool paragraph) { // Envia uma stri
     }
     else {
         string tosend = "\u001B[48D" + line;
-        if (paragraph) tosend += "\r\n";
-        write(so, tosend.c_str(), tosend.length());
+        if (paragraph) tosend += Utils::getStdEndlString();
+        ::write(so, tosend.c_str(), tosend.length());
     }
 }
 
-char *Network::get_ip(int socket_ref) {
+void Network::write(int socketfd, std::string tosend) {
+    if (socketfd < 0) {
+        LOCK;
+        cerr << tosend;
+        UNLOCK;
+    } else {
+        ::write(socketfd, tosend.c_str(), tosend.length());
+    }
+}
+
+void Network::close(int socketId) {
+    shutdown(socketId, 2);
+    ::close(socketId);
+}
+
+string Network::get_ip(int socket_ref) {
     //int fd;
     struct ifreq ifr;
 
@@ -128,7 +134,12 @@ char *Network::get_ip(int socket_ref) {
 
     //close(socket_ref);
 
-    return inet_ntoa(((struct sockaddr_in *) &ifr.ifr_addr)->sin_addr);
+    static Mutex m;
+    m.lock();   //because 'inet_ntoa' uses a shared char* buffer which means it is susceptible to data race problems
+    string ret = string(inet_ntoa(((struct sockaddr_in *) &ifr.ifr_addr)->sin_addr));
+    m.unlock();
+
+    return ret;
 }
 
 bool Network::readline(int socketfd,
@@ -147,10 +158,15 @@ bool Network::readline(int socketfd,
             //cerr << "r" << endl;
             // leu n carateres. se for zero chegamos ao fim
             int n = read(socketfd, buffer, BUFFER_SIZE - 1); // ler do socket
-            if (n == 0)
-                return false; // nada para ser lido -> socket fechado
+            if (n <= 0)
+                throw ConnectionClosed(socketfd); // nada para ser lido -> socket fechado
+            if (buffer[0] == '\n' || buffer[0] == '\r')
+                break;
             if (!isprint(buffer[0]))  //para a eliminar o lixo que aparece com telnet windows
+            {
+                cerr << "ignored" << endl;
                 continue;
+            }
             buffer[n] = 0; // colocar o \0 no fim do buffer
             line += buffer; // acrescentar os dados lidos à string
         }
@@ -184,13 +200,23 @@ void Network::broadcast(int origin, string text) { // Envia uma mensagem para to
 void Network::server_routine() {
     clog("Network server thread running");
     int enable_resuse_addr = 1;
+
+    GarbageCollector<Thread> gc([](const Thread *t) -> bool {
+        return t->isRunning();
+    }, [](Thread *t) -> void {
+        t->cancel();
+    });
+    gc.setAutoShakeDownState(false);
+    gc.setAutoShakeDownPeriod(30000);
+    gc.setAutoShakeDownState(true);
+
     while (true) {
         // Aceitar uma nova ligação. O endereço do cliente fica guardado em
         // cli_addr - endereço do cliente
         // newsockfd - id do socket que comunica com este cliente
 
-        newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &client_addr_length);
-        //vcout << "client accepted" << endl;
+        int newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &client_addr_length);
+        //cout << "client accepted " << newsockfd << endl;
 
         if (Flag_shutdown || newsockfd < 0) {
             //vcout << "Shutdown signal recieved." << endl;
@@ -199,27 +225,27 @@ void Network::server_routine() {
 
         setsockopt(newsockfd, SOL_SOCKET, SO_REUSEADDR, &enable_resuse_addr, sizeof(int));
 
-        // Criar uma thread para tratar dos pedidos do novo cliente
-        pthread_t thread;
-        pthread_create(&thread, NULL, cliente_redirect, (void *) this);
-        socket_threads.insert(thread);
-        /*vcout << "Waiting" << endl;
-        WAIT;
-        vcout << "Done waiting" << endl;*/
+        Thread *newClient = new Thread(
+                [this, newsockfd]() {
+                    cliente(newsockfd);
+                }, [this, newClient]() {
+                    //cout << "ON_STOP" << endl;
+                }
+        );
+        newClient->start();
+        gc.add(newClient);
     }
-    shutdown(sockfd, 2);
     close(sockfd);
-    //shutdown_server();
+    shutdown_server();
     //vcout << "Leaving server routine" << endl;
-    server_running = Flag_shutdown = false;
+    Flag_shutdown = false;
     server_t = 0;
 
-    //socket_threads.erase(pthread_self());
     clog("Leaving server routine");
 }
 
 void Network::shutdown_server() {
-    if (!server_running)
+    if (!serverThread.isRunning())
         return;
     clog("Shutting down Network server");
 
@@ -229,18 +255,15 @@ void Network::shutdown_server() {
     int dummy = socket(AF_INET, SOCK_STREAM, 0);
     setsockopt(dummy, SOL_SOCKET, SO_REUSEADDR, &enable_resuse_addr, sizeof(int));
     connect(dummy, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
-    pthread_join(server_t, NULL);
+    serverThread.join();
     cout << "Network server is now shutdown!" << endl;
-    shutdown(dummy, 2);
     close(dummy);
 
     vcout << "clients size=" << clients.size() << endl;
     int s_u_i = clients[IN_SERVER]; //to save the user that was logged in the server because i don't want to close the server client, just the network clients
     while (clients.size()) //fecha todas as sockets, terminando os reads e consequentemente as threads dos clientes
     {
-        vcout << "aqui" << endl;
         if (clients.begin()->first != IN_SERVER) {
-            shutdown(clients.begin()->first, 2);
             close(clients.begin()->first);
             cerr << "closed socket " << clients.begin()->first << endl;
         }
@@ -258,38 +281,109 @@ void Network::shutdown_server() {
 
     clog("All clients kicked");
 
-    server_running = Flag_shutdown = false;
+    Flag_shutdown = false;
     server_t = 0;
 
     clog("Network server successfully shutdown");
 }
 
+bool Network::isRunning() {
+    return serverThread.isRunning();
+}
+
 // Trata de receber dados de um cliente cujo socketid foi passado como parâmetro
-void Network::cliente() {
-    int client_socket = newsockfd;
+void Network::cliente(int newsockfd) {
+    //unique_ptr<ClientContainer> clientContainer(new ClientContainer(newsockfd));
+    ClientContainer *clientContainer = new ClientContainer(newsockfd);
 
     //LOCK;cerr << "\u001B[8DNew client accepted on socket " << client_socket << "." << endl << "> ";UNLOCK;
-    clog("New client accepted on socket " << client_socket << ". Thread where this socket is being heard: "
+    clog("New client accepted on socket " << clientContainer->socketId << ". Thread where this socket is being heard: "
                                           << pthread_self());
-
-    Client c(client_socket);  //start a new Clinet object
-    string input;
-
 
     //--------------------------------CLIENT ROUTINE-----------------------------//
     //write(client_socket,"\u001B[44;31;0m",strlen("\u001B[44;31;0m"));
-    write(client_socket, "> ", 2);
+    //*clientContainer << "> ";
 
-    while (readline(client_socket, input)) {
-        //cout << input.size() << endl;
-        if (input == "" || input == "\n" || input == "\r" || input == "\r\n")
-            continue;
-        if (!c.parse(input))
+    clientContainer->clear();
+    while (1) {
+        try {
+            vector<CommandSet> &commadSets = clientContainer->getCommandSets();
+            int counter = 0, input;
+            *clientContainer << Connection::endl << Connection::GOTO_BEGIN << counter++ << " - quit"
+                             << Connection::endl;
+            for (auto &c : commadSets)
+                *clientContainer << Connection::GOTO_BEGIN << counter++ << " - " << c.getGroup()->getGroupName()
+                                 << Connection::endl;
+            *clientContainer << Connection::GOTO_BEGIN << counter++ << " - help" << Connection::endl;
+
+            input = clientContainer->getInt("Select option");
+
+            if (input == 0)
+                break;
+            else if (input > (int) commadSets.size() + 1 || input < 0) {
+                clientContainer->clear();
+                *clientContainer << Connection::GOTO_BEGIN << "Wrong choice. Pick again!";
+                continue;
+            } else {
+                if (input == (int) commadSets.size() + 1) {  //help
+                    clientContainer->clear();
+                    for (const CommandSet &cs : commadSets) {
+                        *clientContainer << Connection::GOTO_BEGIN << cs.getGroup()->getGroupHelp();
+                    }
+                } else {    //one of the command sets
+                    CommandSet &selectedCommandSet = commadSets.at((size_t) (input) - 1);
+                    *clientContainer << Connection::endl;
+                    clientContainer->clear();
+                    repeat_sub_menu:
+                    counter = 0;
+                    *clientContainer << Connection::GOTO_BEGIN << Utils::makeHeader(
+                            string("Sub-menu \"") + selectedCommandSet.getGroup()->getGroupName() + "\"")
+                                     << Connection::endl;
+                    *clientContainer << Connection::endl << Connection::GOTO_BEGIN << counter++ << " - back"
+                                     << Connection::endl;
+                    for (auto &c : selectedCommandSet.getCommands()) {
+                        *clientContainer << Connection::GOTO_BEGIN << counter++ << " - " << c->getName()
+                                         << Connection::endl;
+                    }
+                    *clientContainer << Connection::GOTO_BEGIN << counter++ << " - help" << Connection::endl;
+
+                    input = clientContainer->getInt("Select option");
+
+                    if (input == 0) { //back
+                        clientContainer->clear();
+                        continue;
+                    } else if (input > (int) selectedCommandSet.getCommands().size() + 1 || input < 0) {
+                        clientContainer->clear();
+                        *clientContainer << Connection::GOTO_BEGIN << "Wrong choice. Pick again!";
+                        goto repeat_sub_menu;
+                    } else if (input == (int) selectedCommandSet.getCommands().size() + 1) {  //help
+                        clientContainer->clear();
+                        *clientContainer << Connection::GOTO_BEGIN << Utils::makeHeader(
+                                string("Sub-menu \"") + selectedCommandSet.getGroup()->getGroupName() + "\"'s help:")
+                                         << Connection::endl;
+                        for (const Command *c : selectedCommandSet.getCommands()) {
+                            *clientContainer << Connection::GOTO_BEGIN << c->getHelp();
+                        }
+                    } else {    //one of the commands
+                        try {
+                            selectedCommandSet.getCommands().at((size_t) input - 1)->run();
+                        } catch (ClientMessage &cm) {
+                            cm.show(*clientContainer);
+                        }
+                    }
+                }
+            }
+
+        } catch (ClientError &ce) {
+            ce.show(*clientContainer);
+        } catch (ConnectionClosed &cc) {
+            cerr << "ConnectionClosed exception!" << endl;
             break;
-        //cout << "Socket " << client_socket << " said: " << input << endl;
-        //broadcast(client_socket, input);
-        write(client_socket, "> ", 2);
+        } catch (QuitClient &qc) {
+            break;
+        }
     }
+    delete clientContainer;
     /*write(client_socket,"\u001B[2J\u001B[H",strlen("\u001B[2J\u001B[H"));
     writeline(client_socket,"ola");
     char s[]="nana\u001B[48D ole";
@@ -297,8 +391,150 @@ void Network::cliente() {
 
     //----------------------------------CLIENT DISCONNECTING PROCESS---------------------------------//
 
-    clients.erase(client_socket);
-    shutdown(client_socket, 2);
-    close(client_socket);
-    socket_threads.erase(pthread_self());
+    clientContainer->close();
+    //cout << "CLIENTE() ENDED!" << endl;
+    /*clients.erase(clientContainer);
+    close(clientContainer);
+    socket_threads.erase(pthread_self());*/
+}
+
+//// Trata de receber dados de um cliente cujo socketid foi passado como parâmetro
+//void Network::cliente(int client_socket) {
+//    //LOCK;cerr << "\u001B[8DNew client accepted on socket " << client_socket << "." << endl << "> ";UNLOCK;
+//    clog("New client accepted on socket " << client_socket << ". Thread where this socket is being heard: "
+//                                          << pthread_self());
+//
+//    Client c(client_socket);  //start a new Clinet object
+//    string input;
+//
+//
+//    //--------------------------------CLIENT ROUTINE-----------------------------//
+//    //write(client_socket,"\u001B[44;31;0m",strlen("\u001B[44;31;0m"));
+//    write(client_socket, "> ");
+//
+//    while (readline(client_socket, input)) {
+//        //cout << input.size() << endl;
+//        if (input == "" || input == "\n" || input == "\r" || input == "\r\n")
+//            continue;
+//        if (!c.parse(input))
+//            break;
+//        //cout << "Socket " << client_socket << " said: " << input << endl;
+//        //broadcast(client_socket, input);
+//        write(client_socket, "> ");
+//    }
+//    /*write(client_socket,"\u001B[2J\u001B[H",strlen("\u001B[2J\u001B[H"));
+//    writeline(client_socket,"ola");
+//    char s[]="nana\u001B[48D ole";
+//    write(client_socket,s,strlen(s));*/
+//
+//    //----------------------------------CLIENT DISCONNECTING PROCESS---------------------------------//
+//
+//    clients.erase(client_socket);
+//    close(client_socket);
+//    socket_threads.erase(pthread_self());
+//}
+
+set<Connection *> Connection::connections = set<Connection *>();
+
+Connection::Connection(int socketId) : socketId(socketId), closed(false) {
+    connections.insert(this);
+}
+
+Connection::~Connection() {
+    close();
+    connections.erase(this);
+}
+
+void Connection::throwIfClosed() const {
+    if (closed)
+        throw (runtime_error("Tried to use Connection but it is closed!"));
+}
+
+int Connection::getSocketId() const {
+    return socketId;
+}
+
+//TODO: if EOF, throw something to cancel the command
+
+int Connection::getInt(const string &msg) const {
+    int ret;
+    do {
+        try {
+            *this << msg << ": ";
+            *this >> ret;
+        } catch (logic_error &le) {
+            *this << Connection::GOTO_BEGIN << "Only integers are allowed!" << Connection::endl;
+            continue;
+        }
+        break;
+    } while (1);
+    return ret;
+}
+
+double Connection::getDouble(const string &msg) const {
+    double ret;
+    do {
+        try {
+            *this << msg << ": ";
+            *this >> ret;
+        } catch (logic_error &le) {
+            *this << Connection::GOTO_BEGIN << "Only floating point values are allowed!" << Connection::endl;
+            continue;
+        }
+        break;
+    } while (1);
+    return ret;
+}
+
+bool Connection::getBool(const string &msg) const {
+    bool ret;
+    do {
+        try {
+            *this << msg << ": ";
+            *this >> ret;
+        } catch (logic_error &le) {
+            *this << Connection::GOTO_BEGIN << "Only booleans are allowed!" << Connection::endl;
+            continue;
+        }
+        break;
+    } while (1);
+    return ret;
+}
+
+string Connection::getString(const string &msg) const {
+    string ret;
+    do {
+        *this << msg << ": ";
+        *this >> ret;
+    } while (ret.empty() || Utils::isOnlyParagraphs(ret));
+    return ret;
+}
+
+void Connection::close() {
+    if (closed)
+        return;
+    closed = true;
+    if (socketId > 0)
+        Network::close(socketId);
+    else
+        Network::server().shutdown_server();
+}
+
+void Connection::clear() {
+    if (socketId > 0) {
+        char clear_str[] = "\u001B[2J\u001B[H";
+        write(socketId, clear_str, strlen(clear_str));
+    } else
+        system("clear");
+}
+
+const string Connection::endl = Utils::getStdEndlString();
+
+const string Connection::GOTO_BEGIN = "\u001B[48D";
+
+ConnectionClosed::ConnectionClosed(int socketId) : whatMessage(
+        string("Conection with socket ") + socketId + "was closed!") {}
+
+const char *ConnectionClosed::what() const throw() {
+    return whatMessage.c_str();
 }

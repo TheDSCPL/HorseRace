@@ -75,15 +75,29 @@ void *wrapper(void *f) {
     return nullptr;
 }
 
-Thread::Thread(std::function<void()> f) : routine(f), finished(false) {}
+Thread::Thread(std::function<void()> f, std::function<void()> os) : routine(f), onStop(os), running(false),
+                                                                    onStopCalledOnLastRun(false) {}
 //(std::function<void *(void *)>)[&f](void*)->void*{f(); return nullptr;}
 
+Thread::~Thread() {
+    //cout << "DELETING THREAD!" << endl;
+    cancel();
+}
+
 void Thread::start() {
+    onStopCalledOnLastRun = false;
     pthread_create(&thread, NULL, trick, (void *) this);
 }
 
 void Thread::usleep(long millis) {
     this_thread::sleep_for(chrono::milliseconds(millis));
+}
+
+void Thread::_onStop() {
+    if (onStopCalledOnLastRun)
+        return;
+    onStopCalledOnLastRun = true;
+    onStop();
 }
 
 void *Thread::trick(void *c) {//http://stackoverflow.com/a/1151615
@@ -93,12 +107,14 @@ void *Thread::trick(void *c) {//http://stackoverflow.com/a/1151615
 
 void Thread::run() {
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, nullptr);
+    running = true;
     routine();
-    finished = true;
+    running = false;
+    _onStop();
 }
 
-bool Thread::isFinished() const {
-    return finished;
+bool Thread::isRunning() const {
+    return running;
 }
 
 void Thread::join() const {
@@ -106,5 +122,8 @@ void Thread::join() const {
 }
 
 void Thread::cancel() {
+    running = false;
+    _onStop();
+    //cout << "FINISHED CANCELING!" << endl;
     pthread_cancel(thread);
 }

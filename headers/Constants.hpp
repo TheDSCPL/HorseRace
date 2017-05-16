@@ -20,6 +20,10 @@ namespace Constants {
 	};
 
     const static std::string defaultClientErrorWhatMessage = "Something went wrong!";
+    const static bool DEFAULT_ADMIN = false;
+
+    const static int MAX_HORSES_ON_RACE = 10;
+    const static int MIN_HORSES_ON_RACE = 3;
 }
 
 namespace SQLPreparedStatementsNames {
@@ -29,6 +33,8 @@ namespace SQLPreparedStatementsNames {
     const static std::string getUserId = "GET_USER_ID";
     //username, hashed_pass
     const static std::string checkUserAndPass = "CHECK_USER_AND_PASS";
+    //user_id
+    const static std::string checkAdmin = "CHECK_ADMIN";
     //user_id, new_pass, old_pass
     const static std::string changePassword = "CHANGE_PASSWORD";
     //user_id, admin
@@ -41,6 +47,8 @@ namespace SQLPreparedStatementsNames {
     const static std::string insertHorseInRace = "INSERT_HORSE_IN_RACE";
     //laps
     const static std::string insertRace = "INSERT_RACE";
+    //horse_id, race_id
+    const static std::string checkHorseOnRace = "CHECK_HORSE_ON_RACE";
     //
     const static std::string getLatestRaceId = "GET_LATEST_RACE_ID";
     //race_id

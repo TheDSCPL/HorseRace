@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <sstream>
 #include "../headers/Log.hpp"
+#include "../headers/Properties.hpp"
 
 string next_log_name(string beggining,string path="");
 bool file_exists(string s);
@@ -32,8 +33,10 @@ Log::Log()
 	pthread_mutex_init(&smutex,NULL);
 	pthread_mutex_init(&logmutex,NULL);
 
+    system((string("mkdir -p ") + Properties::getDefault().getProperty("LOG_FILES_PATH")).c_str());
 	restore=clog.rdbuf();
-	log_file.open( next_log_name(LOG_FILE_NAME,LOG_FILES_PATH) , ofstream::out | ofstream::app);
+    log_file.open(next_log_name(Properties::getDefault().getProperty("LOG_FILE_NAME"),
+                                Properties::getDefault().getProperty("LOG_FILES_PATH")), ofstream::out | ofstream::app);
 	clog.rdbuf(log_file.rdbuf());
 	first_writing=true;
 

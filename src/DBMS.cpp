@@ -75,9 +75,9 @@ vector<Tuple*> SQLResultTable::getTuplesFromPGresult(const PGresult *pgr) {
     unsigned long n = (unsigned long)Utils::max(PQntuples(pgr),0);
     unsigned long columns = (unsigned long)Utils::max(PQnfields(pgr),0);
     vector<Tuple *> ret;
-    for(int i = 0; i<n ; i++) {
+    for (unsigned long i = 0; i < n; i++) {
         vector<string *> t;
-        for(int j = 0 ; j<columns ; j++)
+        for (unsigned long j = 0; j < columns; j++)
         {
             if(PQgetisnull(pgr,i,j))
                 t.push_back(NULL);
@@ -92,7 +92,7 @@ vector<Tuple*> SQLResultTable::getTuplesFromPGresult(const PGresult *pgr) {
 vector<std::string> SQLResultTable::getColumnNamesFromPGresult(const PGresult *pgr) {
     unsigned long columns = (unsigned long)Utils::max(PQnfields(pgr),0);
     vector<string> ret;
-    for(int i = 0; i<columns ; i++)
+    for (unsigned long i = 0; i < columns; i++)
         ret.push_back(PQfname(pgr,i));
     return ret;
 }
@@ -148,7 +148,7 @@ const vector<string>& SQLResultTable::getColumnNames() const {
 
 std::vector<Tuple> SQLResultTable::getTuples() const {
     vector<Tuple> ret;
-    for (int i = 0; i < getNumberOfTuples(); i++) {
+    for (unsigned long i = 0; i < getNumberOfTuples(); i++) {
         ret.push_back(Tuple(*tuples[i]));
     }
     return ret;
@@ -203,12 +203,12 @@ const SQLResultTable& SQLResult::getResultTable() const {
 
 //------------------------------------------ PreparedStatement ------------------------------------------//
 
-PreparedStatement::PreparedStatement(string const &name, string const &declaration) : name(name),
-                                                                                      declaration(declaration),
-                                                                                      _temp((char **) malloc(
-                                                                                              Utils::getNumberOfArgs(
-                                                                                                      declaration) *
-                                                                                              sizeof(char *))) {
+PreparedStatement::PreparedStatement(string const &name, string const &declaration) : _temp((char **) malloc(
+        Utils::getNumberOfArgs(
+                declaration) *
+        sizeof(char *))),
+                                                                                      name(name),
+                                                                                      declaration(declaration) {
     if (!S.getPreparedStatement(name)) {
         PGresult *res = PQprepare(S.conn, name.c_str(), declaration.c_str(), Utils::getNumberOfArgs(declaration), NULL);
         ExecStatusType r = PQresultStatus(res);
@@ -224,11 +224,11 @@ PreparedStatement::PreparedStatement(string const &name, string const &declarati
 }
 
 SQLResult PreparedStatement::run(const std::vector<std::string> &args) const {
-    const int n = Utils::getNumberOfArgs(declaration);
+    const unsigned int n = Utils::getNumberOfArgs(declaration);
     cerr << args.size() << " " << n << endl;
     if(args.size() != n)
         throw DBMSErrorRunningPreparedStatement("Prepared statement's arguments don't match the number of arguments that the prepared statement should receive.");
-    for(int i = 0 ; i < n ; i++)
+    for (unsigned int i = 0; i < n; i++)
         _temp[i] = (char *) args[i].c_str();
 
     return SQLResult(

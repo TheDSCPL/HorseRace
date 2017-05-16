@@ -44,6 +44,12 @@ void Client::initPreparedStatements() {
         query << "WHERE username = $1 AND pass = $2;" << endl;
 		S.requestNewPreparedStatement(checkUserAndPass, query.str());
 	}
+	//user_id
+	if (!S.getPreparedStatement(checkAdmin)) {
+		stringstream query;
+		query << "SELECT admin FROM users WHERE user_id = $1;" << endl;
+		S.requestNewPreparedStatement(checkAdmin, query.str());
+	}
     //user_id, new_pass, old_pass
 	if (!S.getPreparedStatement(changePassword)) {
 		stringstream query;
@@ -85,6 +91,14 @@ void Client::initPreparedStatements() {
 		stringstream query;
 		query << "INSERT INTO races VALUES ($1,DEFAULT,DEFAULT,DEFAULT);" << endl;
 		S.requestNewPreparedStatement(insertRace, query.str());
+	}
+	//horse_id, race_id
+	if (!S.getPreparedStatement(checkHorseOnRace)) {
+		stringstream query;
+		query << "SELECT *" << endl;
+		query << "FROM are_on" << endl;
+		query << "WHERE horse_id=$1 AND race_id=$2";
+		S.requestNewPreparedStatement(checkHorseOnRace, query.str());
 	}
 	//
 	if (!S.getPreparedStatement(getLatestRaceId)) {
@@ -140,7 +154,7 @@ void Client::initPreparedStatements() {
 		stringstream query;
         query << "SELECT  COUNT(horse_id)" << endl;
         query << "FROM    are_on" << endl;
-        query << "WHERE   race_id = r_i;";
+		query << "WHERE   race_id = $1;";
 		S.requestNewPreparedStatement(getNumHorsesOnRace, query.str());
 	}
 	//race_id
@@ -184,8 +198,9 @@ void Client::initPreparedStatements() {
     if (!S.getPreparedStatement(getAllRaces)) {
         stringstream query;
         query << "SELECT *" << endl;
-        query << "FROM races;" << endl;
-        S.requestNewPreparedStatement(changeBet, query.str());
+		query << "FROM races" << endl;
+		query << "ORDER BY race_id;" << endl;
+		S.requestNewPreparedStatement(getAllRaces, query.str());
     }
     //race_id
     if (!S.getPreparedStatement(hasRaceStarted)) {
@@ -229,7 +244,7 @@ void Client::initPreparedStatements() {
         query << "ORDER BY user_id;" << endl;
         S.requestNewPreparedStatement(getAllUsers, query.str());
     }
-    if (!S.getPreparedStatement(getLoggedInUsers_dropTempTableIfExists)) {
+	/*if (!S.getPreparedStatement(getLoggedInUsers_dropTempTableIfExists)) {
         stringstream query;
         query << "DROP TABLE IF EXISTS foo;" << endl;
         S.requestNewPreparedStatement(getLoggedInUsers_dropTempTableIfExists, query.str());
@@ -261,7 +276,7 @@ void Client::initPreparedStatements() {
         stringstream query;
         query << "DISCARD TEMP;" << endl;
         S.requestNewPreparedStatement(getLoggedInUsers_destroyTempTable, query.str());
-    }
+    }*/
 }
 
 void print_command(parsed_command temp)
@@ -308,11 +323,6 @@ void print_command(parsed_command temp)
 
 parsed_command Client::get_parsed_command(string input)
 {
-	const type_info& _string = typeid(std::string);
-	const type_info& _int = typeid(int);
-	const type_info& _double = typeid(double);
-	const type_info& _bool = typeid(bool);
-	const type_info& _v_int = typeid(vector<int>);
 	const map<string,vector<arg>> commands =
 	{
             {"\\help" ,            {} },																								//ALTER
@@ -362,7 +372,7 @@ parsed_command Client::get_parsed_command(string input)
 	command.cmd=buffer;
 	size_t place=buffer.size()+1;
     unsigned long n = it->second.size();
-	for(int i=0;i<n;i++)
+	for (unsigned long i = 0; i < n; i++)
 	{
 		if(place>=size)	//was still waiting for arguments but there are none left
 		{
@@ -578,7 +588,7 @@ bool Client::parse( string ins ) //true always except when "\quit" received.
 		else if(command.cmd=="\\bet_other") 			{bet(command.args[0].get<int>(),command.args[1].get<int>(),command.args[2].get<int>(),command.args[3].get<double>());}
         else if (command.cmd == "\\stop_server") {
             if (client_socket == IN_SERVER && is_admin(user_id)) {
-                if (Network::server().srv_running()) Network::server().shutdown_server();
+				if (Network::server().isRunning()) Network::server().shutdown_server();
                 else
                     writeline("Server is already shut down.");
             } else writeline("You cannot shutdown the server unless you are logged in as an admin in the server.");
@@ -659,7 +669,7 @@ bool check_valid(string pa)
 Client::Client(int so) : client_socket(so), user_id(LOGGED_OFF)
 {
 	vcout << "constructor " << client_socket << endl;
-	Network::server().clients.insert(make_pair(client_socket,LOGGED_OFF));
+	//Network::server().clients.insert(make_pair(client_socket,LOGGED_OFF));
 
 	if(client_socket>0)
 	{
@@ -689,7 +699,8 @@ Client::~Client()
 	else
 	{
 		vcout << "who was logged in as \"" << user_id << "\" has disconnected.";
-		clog( "Client in socket " << client_socket << "(user_id=" << user_id << ") has disconnected. Killing thread and closing socket." );
+		clog("Client in socket " << client_socket << "(user_id=" << user_id
+								 << ") has disconnected. Killing thread and deleting socket.");
 	}
 	//Network::server().clients.erase(client_socket);
 

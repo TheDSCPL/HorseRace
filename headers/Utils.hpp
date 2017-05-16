@@ -38,7 +38,7 @@ namespace Utils {
 
     std::string demangle(std::string const&);
 
-    int getNumberOfArgs(std::string const &);
+    unsigned int getNumberOfArgs(std::string const &);
 
     template<typename T>
     std::vector<T *> copyDynamicVector(const std::vector<T *> &);
@@ -48,6 +48,22 @@ namespace Utils {
     std::string makeCommandDescription(const std::string&, const std::string&);
 
     std::string makeCommandDescriptionNote(const std::string &);
+
+    std::string getStdEndlString();
+
+    const std::string endl = getStdEndlString();
+
+    bool isOnlyParagraphs(const std::string &s);
+
+    template<typename T>
+    T *ptr(T &obj);
+
+    template<typename T>
+    T *ptr(T *obj);
+
+    //Only need to give the Child template type. Parent is inferred from 'parent'
+    template<class Child, class Parent>
+    bool instanceof(Parent parent);
 }
 
 #endif

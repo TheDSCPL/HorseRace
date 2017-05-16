@@ -40,8 +40,11 @@ public:
 
 class Thread {
     pthread_t thread;
-    std::function<void()> routine;
-    volatile bool finished;
+    //it is !!!NOT!!! safe for the Thread to suicide in the onStop function
+    std::function<void()> routine, onStop;
+    volatile bool running, onStopCalledOnLastRun;
+
+    void _onStop();
 
     static void *trick(void *_c);
 
@@ -52,13 +55,15 @@ class Thread {
     void operator=(Thread const &);
 
 public:
-    Thread(std::function<void()>);
+    Thread(std::function<void()>, std::function<void()> = []() {});
+
+    ~Thread();
 
     void start();
 
     static void usleep(long millis);
 
-    bool isFinished() const;
+    bool isRunning() const;
 
     void join() const;
 

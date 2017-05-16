@@ -6,6 +6,8 @@
 #include <set>
 #include <chrono>
 #include <thread>
+#include <sstream>
+#include <unistd.h>
 #include "../headers/Utils.hpp"
 #include "../headers/DBMS.hpp"
 
@@ -115,28 +117,32 @@ int Utils::stoi(const std::string &s) {
 
 bool Utils::isInt(const string& s) {
     if(s.empty())
-        return true;
+        return false;
 
     auto it = s.begin();
     if(*it == '-')
         it++;   //if it's negative, ignore the first character ('-')
 
-    for( ; it != s.end() ; it++)
+    bool hadAtLeastOneDigit = false;
+    for (; it != s.end(); it++) {
+        hadAtLeastOneDigit = true;
         if(!isdigit(*it))
             return false;
+    }
 
-    return true;
+    return hadAtLeastOneDigit;
 }
 
 bool Utils::isDouble(const string & s) {
     if(s.empty())
-        return true;
+        return false;
 
     auto it = s.begin();
     if(*it == '-')
         it++;   //if it's negative, ignore the first character ('-')
 
     bool foundDot = false;
+    bool hadAtLeastOneDigit = false;
 
     for( ; it != s.end() ; it++) {
         if(*it == '.') {
@@ -145,11 +151,12 @@ bool Utils::isDouble(const string & s) {
             foundDot = true;
             continue;
         }
+        hadAtLeastOneDigit = true;
         if(!isdigit(*it))
             return false;
     }
 
-    return true;
+    return hadAtLeastOneDigit;
 }
 
 string Utils::demangle(string const& to_demangle)	//to know what was the unknow exception was when "catch(...) activates	//http://stackoverflow.com/a/24997351/6302540
@@ -161,12 +168,12 @@ string Utils::demangle(string const& to_demangle)	//to know what was the unknow 
     return demangled;
 }
 
-int Utils::getNumberOfArgs(std::string const &query) {
+unsigned int Utils::getNumberOfArgs(std::string const &query) {
     if (query.empty())
         return 0;
     query.length();
     set<int> args;
-    for(int i = 0 ; i<query.length()-1 /*the last character is never an argument so -1*/ ; i++) {
+    for (unsigned int i = 0; i < query.length() - 1 /*the last character is never an argument so -1*/ ; i++) {
         if(query[i] == '$') {
             string n;
             while (isdigit(query[i + 1])) {
@@ -186,7 +193,7 @@ int Utils::getNumberOfArgs(std::string const &query) {
 template<typename T>
 std::vector<T *> Utils::copyDynamicVector(const std::vector<T *> &v) {
     vector<T *> ret;
-    for (int i = 0; i < v.size(); i++)
+    for (unsigned int i = 0; i < v.size(); i++)
         ret.push_back(new T(*v[i]));
     return ret;
 }
@@ -207,4 +214,30 @@ std::string Utils::makeCommandDescription(const std::string & methodName, const 
 
 std::string Utils::makeCommandDescriptionNote(const std::string &note) {
     return string("\t\t") + "Note: " + note;
+}
+
+std::string Utils::getStdEndlString() {
+    stringstream ret;
+    ret << std::endl;
+    return ret.str();
+}
+
+bool Utils::isOnlyParagraphs(const std::string &s) {
+    if (s.empty())
+        return false;
+    for (const char c : s)
+        if (c != '\r' && c != '\n')
+            return false;
+    return true;
+}
+
+template<typename T>
+T *Utils::ptr(T &obj) { return &obj; }
+
+template<typename T>
+T *Utils::ptr(T *obj) { return obj; }
+
+template<class Child, class Parent>
+bool Utils::instanceof(Parent parent) {
+    return dynamic_cast<Child *>(Utils::ptr(parent)) != nullptr;
 }

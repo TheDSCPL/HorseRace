@@ -118,6 +118,9 @@ int main(int argc, char *argv[])
 
     system("clear");
 
+    S.start();
+    Client::initPreparedStatements();
+
     clog("Program has started");
 
     Network::server();    //creates the sockets server. check sockets.hpp for the definition of this macro//
@@ -135,10 +138,29 @@ int main(int argc, char *argv[])
 
     //------------------------------SHUTTING DOWN------------------------------//
 
+    Network::server().shutdown_server();
+
     pthread_t watchdog;
     pthread_create(&watchdog, NULL, watchdog_routine, NULL);
 
     while (races.size()) usleep(500);
+
+    /*Thread askForInput ([](){
+        char a;
+        cout << "I'm waiting for input!" << endl;
+        cin >> a;
+    });
+    Thread watchDog ([&askForInput](){
+        Thread::usleep(5000);
+        cout << "Oh no you're not!" << endl;
+        askForInput.cancel();
+    });
+
+    watchDog.start();
+    askForInput.start();
+    askForInput.join();
+    watchDog.cancel();
+    watchDog.join();*/
 
     /*cout << SHA_256_digest("password") << endl;
     cout << SHA_512_digest("password") << endl;

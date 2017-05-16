@@ -7,6 +7,8 @@
 
 #define EXECUTE res=SQLServer::server().executeSQL(query.str());
 
+using namespace Constants;
+
 map<int,class Race*> races;
 
 void Race::writeline(int so, string s,int column,int line)
@@ -46,7 +48,7 @@ void Race::count_down(int secs)
 	}while(temp>0);
 }
 
-Race::Race(int r_i , int l) : race_id(r_i) , laps(l) , bets(get_race_bets(r_i)), next_place(-1)//, bets(0)
+Race::Race(int r_i, int l) : next_place(-1), race_id(r_i), laps(l), bets(get_race_bets(r_i)) //, bets(0)
 {
 	horse_info temp;
 	temp.place=-1;

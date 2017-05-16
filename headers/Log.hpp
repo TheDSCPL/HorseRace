@@ -23,8 +23,6 @@ THIS IS A THREAD-SAFE LIBRARY TO CREATING LOG FILES.
 #endif
 
 #ifdef LOG_CPP	//coisas que só são feitas DENTRO do log.cpp
-#define LOG_FILE_NAME "BOP2_proj_log"
-#define LOG_FILES_PATH "logs"
 typedef struct tm TM;
 #endif
 
